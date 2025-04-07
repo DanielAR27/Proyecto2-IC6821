@@ -12,10 +12,12 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "scheme": "sportsapp",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.example.sportsapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -23,6 +25,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1cce9245-7d1e-47b2-8aac-859d9ab8b5c0"
+      }
     }
   }
 }
