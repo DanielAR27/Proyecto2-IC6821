@@ -1,24 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, StatusBar, Alert } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useApp } from './AppContext';
+import { createOrUpdateUser } from './services/apiService';
 
 // Ensures the auth session closes properly
 WebBrowser.maybeCompleteAuthSession();
 
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
+  const { isDarkMode, toggleTheme, language, toggleLanguage, login, t } = useApp();
 
   // Set up Google Auth directly with Expo
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '602458839279-qu6l9ao2br63uantgd7i1gharne2824a.apps.googleusercontent.com'
+    androidClientId: '602458839279-qu6l9ao2br63uantgd7i1gharne2824a.apps.googleusercontent.com',
+    // Add iosClientId if you're developing for iOS
   });
 
   // Watch for response from Google auth
   useEffect(() => {
     if (response?.type === 'success') {
       handleGoogleResponse(response.authentication.accessToken);
+    } else if (response?.type === 'dismiss' || response?.type === 'cancel') {
+      // Handle dismissal or cancellation by resetting loading state
+      setLoading(false);
     }
   }, [response]);
 
@@ -36,19 +42,49 @@ const LoginScreen = ({ onLogin }) => {
       
       const userInfo = await userInfoResponse.json();
       
-      // Save user info to AsyncStorage
-      await AsyncStorage.setItem('@user', JSON.stringify({
-        ...userInfo,
-        accessToken
-      }));
-      
-      // Call the onLogin callback to update parent component state
-      onLogin(userInfo);
+      // Save user to MongoDB through our backend API
+      try {
+        const userData = {
+          google_id: userInfo.id,
+          name: userInfo.name,
+          email: userInfo.email,
+          picture: userInfo.picture
+        };
+        
+        // Create or update user via API
+        const dbUser = await createOrUpdateUser(userData);
+        console.log('User saved to database:', dbUser);
+        
+        // Call the login function from context with the complete info
+        login({
+          ...userInfo,
+          accessToken,
+          mongodb_data: dbUser
+        });
+      } catch (error) {
+        console.error('Error saving user to database:', error);
+        Alert.alert(
+          t('error'),
+          t('errorMessage'),
+          [{ text: 'OK' }],
+          { cancelable: true }
+        );
+        
+        // Still proceed with login even if database save fails
+        login({
+          ...userInfo,
+          accessToken
+        });
+      }
       
     } catch (error) {
       console.error("Error getting user info:", error);
-      alert("Login failed: " + error.message);
-    } finally {
+      Alert.alert(
+        t('error'),
+        t('errorMessage'),
+        [{ text: 'OK' }],
+        { cancelable: true }
+      );
       setLoading(false);
     }
   };
@@ -59,20 +95,43 @@ const LoginScreen = ({ onLogin }) => {
       await promptAsync();
     } catch (error) {
       console.error("Error launching Google sign in:", error);
-      alert("Couldn't start login: " + error.message);
+      Alert.alert(
+        t('error'),
+        "Couldn't start login: " + error.message,
+        [{ text: 'OK' }],
+        { cancelable: true }
+      );
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={[
+      styles.container, 
+      { backgroundColor: isDarkMode ? '#000' : '#fff' }
+    ]}>
+      <StatusBar 
+        barStyle={isDarkMode ? "light-content" : "dark-content"} 
+        backgroundColor="#0099DD" 
+      />
+      
       <View style={styles.header}>
         <Text style={styles.headerText}>Sports App</Text>
       </View>
       
-      <View style={styles.loginContainer}>
-        <Text style={styles.loginText}>LOGIN</Text>
+      <View style={[
+        styles.loginContainer, 
+        { backgroundColor: isDarkMode ? '#333' : '#fff', 
+          borderColor: isDarkMode ? '#555' : '#ddd',
+          borderWidth: 1 
+        }
+      ]}>
+        <Text style={[
+          styles.loginText, 
+          { color: isDarkMode ? '#fff' : '#000' }
+        ]}>
+          {t('login')}
+        </Text>
         
         <TouchableOpacity 
           style={styles.googleButton}
@@ -83,17 +142,41 @@ const LoginScreen = ({ onLogin }) => {
             source={require('./assets/g-logo.png')} 
             style={styles.googleIcon} 
           />
-          <Text style={styles.googleText}>Login with Google</Text>
+          <Text style={[
+            styles.googleText,
+            { color: isDarkMode ? '#fff' : '#000' }
+          ]}>
+            {t('loginWithGoogle')}
+          </Text>
         </TouchableOpacity>
+
+        {loading && (
+          <Text style={[
+            styles.loadingText,
+            { color: isDarkMode ? '#fff' : '#000' }
+          ]}>
+            {t('loading')}
+          </Text>
+        )}
       </View>
       
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.languageButton}>
-          <Text style={styles.languageText}>Español</Text>
+        <TouchableOpacity 
+          style={styles.languageButton}
+          onPress={toggleLanguage}
+        >
+          <Text style={styles.buttonText}>
+            {language === 'en' ? t('spanish') : t('english')}
+          </Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.modeButton}>
-          <Text style={styles.modeText}>Light Mode</Text>
+        <TouchableOpacity 
+          style={styles.modeButton}
+          onPress={toggleTheme}
+        >
+          <Text style={styles.buttonText}>
+            {isDarkMode ? t('lightMode') : t('darkMode')}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -103,7 +186,6 @@ const LoginScreen = ({ onLogin }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -113,6 +195,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0099DD',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 0,
+    marginTop: 0,
   },
   headerText: {
     color: 'white',
@@ -121,7 +205,6 @@ const styles = StyleSheet.create({
   },
   loginContainer: {
     width: '80%',
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -151,6 +234,10 @@ const styles = StyleSheet.create({
   googleText: {
     fontSize: 16,
   },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+  },
   footer: {
     width: '100%',
     flexDirection: 'row',
@@ -158,18 +245,18 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   languageButton: {
-    backgroundColor: '#CCC',
+    backgroundColor: '#0099DD',
     padding: 10,
     marginRight: 10,
-  },
-  languageText: {
-    fontSize: 16,
+    borderRadius: 5,
   },
   modeButton: {
-    backgroundColor: '#CCC',
+    backgroundColor: '#0099DD',
     padding: 10,
+    borderRadius: 5,
   },
-  modeText: {
+  buttonText: {
+    color: 'white',
     fontSize: 16,
   },
 });
