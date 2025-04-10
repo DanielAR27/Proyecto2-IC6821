@@ -1,6 +1,6 @@
 // API service for communicating with the backend
 
-const API_BASE_URL = 'https://sports-app-backend-v69p.onrender.com/api';
+const API_BASE_URL = 'https://sports-app-backend-1jbf.onrender.com/api';
 
 // Function to handle API errors
 const handleApiError = (error) => {

@@ -3,168 +3,219 @@ import {
   StyleSheet, 
   Text, 
   View, 
-  TouchableOpacity, 
-  StatusBar, 
-  Modal, 
-  TouchableWithoutFeedback,
-  Animated,
-  Pressable,
-  ScrollView,
-  Alert
+  ScrollView, 
+  ActivityIndicator, 
+  TouchableOpacity 
 } from 'react-native';
 import { useApp } from './AppContext';
-import { getUserByGoogleId, getTeamNextEvents } from './services/apiService';
+import { getUserByGoogleId } from './services/apiService';
+import AppHeader from './components/AppHeader';
 
 const UserScreen = () => {
   const { isDarkMode, toggleTheme, language, toggleLanguage, user, logout, t } = useApp();
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [headerMenuVisible, setHeaderMenuVisible] = useState(false);
   const [mongoUser, setMongoUser] = useState(null);
-  const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Animation value for sidebar
-  const [sidebarAnimation] = useState(new Animated.Value(-300));
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Fetch user data and upcoming matches
+  // Sidebar menu items
+  const sidebarItems = [
+    {
+      label: t('watchPlayers'),
+      onPress: () => console.log('Navigate to Players Screen')
+    },
+    {
+      label: t('watchTeams'),
+      onPress: () => console.log('Navigate to Teams Screen')
+    }
+  ];
+
+  // Header menu items
+  const headerMenuItems = [
+    {
+      label: language === 'en' ? t('spanish') : t('english'),
+      onPress: toggleLanguage
+    },
+    {
+      label: isDarkMode ? t('lightMode') : t('darkMode'),
+      onPress: toggleTheme
+    },
+    {
+      label: t('logout'),
+      onPress: logout
+    }
+  ];
+
+  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
+      if (!user || !user.id) {
+        setLoading(false);
+        return;
+      }
+      
       try {
-        if (user && user.id) {
-          setLoading(true);
-          // Get user data from our backend API
-          const dbUser = await getUserByGoogleId(user.id);
-          setMongoUser(dbUser);
-          
-          // If user has favorite players, fetch upcoming matches for their team
-          if (dbUser && dbUser.favorite_players && dbUser.favorite_players.length > 0) {
-            const playerData = dbUser.favorite_players[0];
-            if (playerData.team_id) {
-              const matches = await getTeamNextEvents(playerData.team_id);
-              setUpcomingMatches(matches.slice(0, 3)); // Get first 3 matches
-            }
-          }
-        }
+        setLoading(true);
+        setError(null);
+        
+        console.log(`Fetching user data for Google ID: ${user.id}`);
+        const dbUser = await getUserByGoogleId(user.id);
+        console.log('User data fetched successfully');
+        
+        setMongoUser(dbUser);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching user data:', error);
-        Alert.alert(
-          t('error'),
-          t('errorMessage'),
-          [{ text: 'OK' }],
-          { cancelable: true }
-        );
-      } finally {
+        setError(error.message || t('errorMessage'));
         setLoading(false);
       }
     };
     
     fetchUserData();
-  }, [user]);
+  }, [user, retryCount]);
 
-  // Toggle sidebar
-  const toggleSidebar = () => {
-    if (sidebarVisible) {
-      // Close sidebar with animation
-      Animated.timing(sidebarAnimation, {
-        toValue: -300,
-        duration: 300,
-        useNativeDriver: false
-      }).start(() => {
-        setSidebarVisible(false);
-      });
-    } else {
-      // Open sidebar with animation
-      setSidebarVisible(true);
-      Animated.timing(sidebarAnimation, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false
-      }).start();
-    }
+  // Function to retry loading user data
+  const handleRetry = () => {
+    setRetryCount(prevCount => prevCount + 1);
   };
 
-  // Toggle header menu
-  const toggleHeaderMenu = () => {
-    setHeaderMenuVisible(!headerMenuVisible);
-  };
-
-  // Render upcoming matches
-  const renderUpcomingMatches = () => {
-    if (upcomingMatches.length === 0) {
-      return (
+  // Render favorite players section
+  const renderFavoritePlayers = () => {
+    if (!mongoUser) return null;
+    
+    return (
+      <>
         <Text style={[
-          styles.noMatchesText,
+          styles.sectionTitle, 
           { color: isDarkMode ? '#fff' : '#000' }
         ]}>
-          {t('noUpcomingMatches')}
+          {t('favoritePlayers')}
         </Text>
+        
+        {mongoUser.favorite_players && mongoUser.favorite_players.length > 0 ? (
+          mongoUser.favorite_players.map((player, index) => (
+            <View 
+              key={player.player_id || index} 
+              style={[
+                styles.favoriteItem,
+                { backgroundColor: isDarkMode ? '#444' : '#e8e8e8' }
+              ]}
+            >
+              <Text style={[
+                styles.favoriteItemTitle,
+                { color: isDarkMode ? '#fff' : '#000' }
+              ]}>
+                {player.player_name}
+              </Text>
+              {player.team_name && (
+                <Text style={[
+                  styles.favoriteItemSubtitle,
+                  { color: isDarkMode ? '#ccc' : '#555' }
+                ]}>
+                  {player.team_name}
+                </Text>
+              )}
+            </View>
+          ))
+        ) : (
+          <Text style={[
+            styles.noFavoritesText,
+            { color: isDarkMode ? '#ccc' : '#555' }
+          ]}>
+            {t('noFavoritePlayers')}
+          </Text>
+        )}
+      </>
+    );
+  };
+  
+  // Render favorite teams section
+  const renderFavoriteTeams = () => {
+    if (!mongoUser) return null;
+    
+    return (
+      <>
+        <Text style={[
+          styles.sectionTitle, 
+          { color: isDarkMode ? '#fff' : '#000', marginTop: 20 }
+        ]}>
+          {t('favoriteTeams')}
+        </Text>
+        
+        {mongoUser.favorite_teams && mongoUser.favorite_teams.length > 0 ? (
+          mongoUser.favorite_teams.map((team, index) => (
+            <View 
+              key={team.team_id || index} 
+              style={[
+                styles.favoriteItem,
+                { backgroundColor: isDarkMode ? '#444' : '#e8e8e8' }
+              ]}
+            >
+              <Text style={[
+                styles.favoriteItemTitle,
+                { color: isDarkMode ? '#fff' : '#000' }
+              ]}>
+                {team.team_name}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={[
+            styles.noFavoritesText,
+            { color: isDarkMode ? '#ccc' : '#555' }
+          ]}>
+            {t('noFavoriteTeams')}
+          </Text>
+        )}
+      </>
+    );
+  };
+
+  // Render main content
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0099DD" />
+          <Text style={[
+            styles.loadingText,
+            { color: isDarkMode ? '#fff' : '#000', marginTop: 15 }
+          ]}>
+            {t('loading')}
+          </Text>
+        </View>
       );
     }
     
-    return upcomingMatches.map((match, index) => (
-      <View 
-        key={match.idEvent || index} 
-        style={[
-          styles.matchCard,
-          { backgroundColor: isDarkMode ? '#444' : '#e8e8e8' }
-        ]}
-      >
-        <Text style={[
-          styles.matchTitle,
-          { color: isDarkMode ? '#fff' : '#000' }
-        ]}>
-          {match.strEvent}
-        </Text>
-        <Text style={[
-          styles.matchDate,
-          { color: isDarkMode ? '#ccc' : '#555' }
-        ]}>
-          {new Date(match.dateEvent).toLocaleDateString()} - {match.strTime || 'TBD'}
-        </Text>
-        <Text style={[
-          styles.matchVenue,
-          { color: isDarkMode ? '#ccc' : '#555' }
-        ]}>
-          {match.strVenue}
-        </Text>
-      </View>
-    ));
-  };
-
-  return (
-    <View style={[
-      styles.container, 
-      { backgroundColor: isDarkMode ? '#000' : '#fff' }
-    ]}>
-      <StatusBar 
-        barStyle={isDarkMode ? "light-content" : "dark-content"} 
-        backgroundColor="#0099DD" 
-      />
-      
-      {/* Header with hamburger and dropdown menus */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.hamburgerButton} 
-          onPress={toggleSidebar}
-        >
-          <Text style={styles.hamburgerIcon}>≡</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.headerText}>Sports App</Text>
-        
-        <TouchableOpacity 
-          style={styles.dotsButton} 
-          onPress={toggleHeaderMenu}
-        >
-          <Text style={styles.dotsIcon}>⋮</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {/* Main content */}
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={[
+            styles.errorTitle,
+            { color: isDarkMode ? '#ff6666' : '#cc0000' }
+          ]}>
+            {t('error')}
+          </Text>
+          <Text style={[
+            styles.errorMessage,
+            { color: isDarkMode ? '#fff' : '#000' }
+          ]}>
+            {error}
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={handleRetry}
+          >
+            <Text style={styles.retryButtonText}>
+              {t('tryAgain')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return (
+      <>
         <View style={[
           styles.contentContainer, 
           { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
@@ -175,13 +226,6 @@ const UserScreen = () => {
           ]}>
             {t('welcome')}, {user?.name}!
           </Text>
-          
-          <Text style={[
-            styles.idText, 
-            { color: isDarkMode ? '#fff' : '#000' }
-          ]}>
-            {t('yourIdIs')}: {user?.id}
-          </Text>
         </View>
         
         {/* Favorites section */}
@@ -190,230 +234,33 @@ const UserScreen = () => {
             styles.favoritesContainer, 
             { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
           ]}>
-            <Text style={[
-              styles.sectionTitle, 
-              { color: isDarkMode ? '#fff' : '#000' }
-            ]}>
-              {t('favoritePlayers')}
-            </Text>
-            
-            {mongoUser.favorite_players && mongoUser.favorite_players.length > 0 ? (
-              mongoUser.favorite_players.map((player, index) => (
-                <View 
-                  key={player.player_id || index} 
-                  style={[
-                    styles.favoriteItem,
-                    { backgroundColor: isDarkMode ? '#444' : '#e8e8e8' }
-                  ]}
-                >
-                  <Text style={[
-                    styles.favoriteItemTitle,
-                    { color: isDarkMode ? '#fff' : '#000' }
-                  ]}>
-                    {player.player_name}
-                  </Text>
-                  {player.team_name && (
-                    <Text style={[
-                      styles.favoriteItemSubtitle,
-                      { color: isDarkMode ? '#ccc' : '#555' }
-                    ]}>
-                      {player.team_name}
-                    </Text>
-                  )}
-                </View>
-              ))
-            ) : (
-              <Text style={[
-                styles.noFavoritesText,
-                { color: isDarkMode ? '#ccc' : '#555' }
-              ]}>
-                {t('noFavoritePlayers')}
-              </Text>
-            )}
-            
-            <Text style={[
-              styles.sectionTitle, 
-              { color: isDarkMode ? '#fff' : '#000', marginTop: 20 }
-            ]}>
-              {t('favoriteTeams')}
-            </Text>
-            
-            {mongoUser.favorite_teams && mongoUser.favorite_teams.length > 0 ? (
-              mongoUser.favorite_teams.map((team, index) => (
-                <View 
-                  key={team.team_id || index} 
-                  style={[
-                    styles.favoriteItem,
-                    { backgroundColor: isDarkMode ? '#444' : '#e8e8e8' }
-                  ]}
-                >
-                  <Text style={[
-                    styles.favoriteItemTitle,
-                    { color: isDarkMode ? '#fff' : '#000' }
-                  ]}>
-                    {team.team_name}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text style={[
-                styles.noFavoritesText,
-                { color: isDarkMode ? '#ccc' : '#555' }
-              ]}>
-                {t('noFavoriteTeams')}
-              </Text>
-            )}
+            {renderFavoritePlayers()}
+            {renderFavoriteTeams()}
           </View>
         )}
-        
-        {/* Upcoming matches section */}
-        {mongoUser && mongoUser.favorite_players && mongoUser.favorite_players.length > 0 && (
-          <View style={[
-            styles.matchesContainer, 
-            { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
-          ]}>
-            <Text style={[
-              styles.sectionTitle, 
-              { color: isDarkMode ? '#fff' : '#000' }
-            ]}>
-              {t('upcomingMatches')} 
-              {mongoUser.favorite_players[0]?.player_name && 
-                ` - ${mongoUser.favorite_players[0].player_name}`}
-            </Text>
-            
-            {loading ? (
-              <Text style={[
-                styles.loadingText,
-                { color: isDarkMode ? '#ccc' : '#555' }
-              ]}>
-                {t('loading')}...
-              </Text>
-            ) : (
-              renderUpcomingMatches()
-            )}
-          </View>
-        )}
-      </ScrollView>
+      </>
+    );
+  };
+
+  return (
+    <View style={[
+      styles.container, 
+      { backgroundColor: isDarkMode ? '#000' : '#fff' }
+    ]}>
+      {/* Use our reusable AppHeader component */}
+      <AppHeader 
+        title="Sports App" 
+        sidebarItems={sidebarItems}
+        menuItems={headerMenuItems}
+      />
       
-      {/* Pressable overlay for closing menu when clicking outside */}
-      {headerMenuVisible && (
-        <Pressable 
-          style={styles.menuOverlay}
-          onPress={() => setHeaderMenuVisible(false)}
-        >
-          {/* This pressable overlay covers the entire screen */}
-          <View style={[
-            styles.headerMenu,
-            { backgroundColor: isDarkMode ? '#333' : '#f0f0f0' }
-          ]}>
-            <TouchableOpacity 
-              style={[
-                styles.menuButton,
-                { backgroundColor: isDarkMode ? '#555' : '#cecece' }
-              ]} 
-              onPress={() => {
-                toggleLanguage();
-                setHeaderMenuVisible(false);
-              }}
-            >
-              <Text style={[
-                styles.menuButtonText,
-                { color: isDarkMode ? '#fff' : '#000' }
-              ]}>
-                {language === 'en' ? t('spanish') : t('english')}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.menuButton,
-                { backgroundColor: isDarkMode ? '#555' : '#cecece' }
-              ]} 
-              onPress={() => {
-                toggleTheme();
-                setHeaderMenuVisible(false);
-              }}
-            >
-              <Text style={[
-                styles.menuButtonText,
-                { color: isDarkMode ? '#fff' : '#000' }
-              ]}>
-                {isDarkMode ? t('lightMode') : t('darkMode')}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.menuButton, 
-                styles.logoutButton,
-                { backgroundColor: isDarkMode ? '#555' : '#cecece' }
-              ]}
-              onPress={() => {
-                logout();
-                setHeaderMenuVisible(false);
-              }}
-            >
-              <Text style={[
-                styles.menuButtonText,
-                { color: isDarkMode ? '#fff' : '#000' }
-              ]}>
-                {t('logout')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      )}
-      
-      {/* Sidebar modal overlay */}
-      <Modal
-        transparent={true}
-        visible={sidebarVisible}
-        animationType="none"
-        onRequestClose={toggleSidebar}
+      {/* Main content */}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
-        <TouchableWithoutFeedback onPress={toggleSidebar}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <Animated.View 
-                style={[
-                  styles.sidebar,
-                  { 
-                    left: sidebarAnimation,
-                    backgroundColor: isDarkMode ? '#333' : '#f0f0f0'
-                  }
-                ]}
-              >
-                <View style={styles.sidebarHeader}>
-                  <Text style={[
-                    styles.sidebarTitle,
-                    { color: isDarkMode ? '#fff' : '#000' }
-                  ]}>
-                    {t('menu')}
-                  </Text>
-                </View>
-                
-                <TouchableOpacity style={styles.sidebarItem}>
-                  <Text style={[
-                    styles.sidebarItemText,
-                    { color: isDarkMode ? '#fff' : '#000' }
-                  ]}>
-                    {t('watchPlayers')}
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.sidebarItem}>
-                  <Text style={[
-                    styles.sidebarItemText,
-                    { color: isDarkMode ? '#fff' : '#000' }
-                  ]}>
-                    {t('watchTeams')}
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        {renderContent()}
+      </ScrollView>
     </View>
   );
 };
@@ -424,42 +271,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
-  header: {
-    width: '100%',
-    height: 60,
-    backgroundColor: '#0099DD',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 0,
-    marginTop: 0,
-    paddingHorizontal: 15,
-  },
-  headerText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  hamburgerButton: {
-    padding: 5,
-  },
-  hamburgerIcon: {
-    color: 'white',
-    fontSize: 24,
-  },
-  dotsButton: {
-    padding: 5,
-  },
-  dotsIcon: {
-    color: 'white',
-    fontSize: 24,
-  },
   scrollView: {
     width: '100%',
   },
   scrollContent: {
     alignItems: 'center',
     paddingBottom: 30,
+    minHeight: '85%',
   },
   contentContainer: {
     width: '80%',
@@ -475,9 +293,44 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  idText: {
-    fontSize: 18,
-    marginTop: 10,
+  // Loading container
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 50,
+    width: '100%',
+  },
+  // Error container
+  errorContainer: {
+    width: '80%',
+    marginTop: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  errorMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#0099DD',
+    paddingVertical: 10, 
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   // Favorites section
   favoritesContainer: {
@@ -509,104 +362,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 15,
   },
-  // Matches section
-  matchesContainer: {
-    width: '80%',
-    borderRadius: 10,
-    padding: 20,
-    marginTop: 20,
-  },
-  matchCard: {
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  matchTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  matchDate: {
-    fontSize: 14,
-    marginTop: 5,
-  },
-  matchVenue: {
-    fontSize: 14,
-    marginTop: 5,
-  },
-  noMatchesText: {
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
   loadingText: {
     fontSize: 14,
     fontStyle: 'italic',
-  },
-  // Overlay for capturing touches outside the menu
-  menuOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 999,
-  },
-  // Header dropdown menu styles
-  headerMenu: {
-    position: 'absolute',
-    top: 60,
-    right: 10,
-    width: 150,
-    borderRadius: 5,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 1000,
-  },
-  menuButton: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  menuButtonText: {
-    fontSize: 16,
-  },
-  logoutButton: {
-    borderBottomWidth: 0,
-  },
-  // Sidebar styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sidebar: {
-    position: 'absolute',
-    top: 0,
-    width: '70%',
-    height: '100%',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 5, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-  },
-  sidebarHeader: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  sidebarTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  sidebarItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  sidebarItemText: {
-    fontSize: 16,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, StatusBar, Alert } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -10,7 +10,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null);
   const { isDarkMode, toggleTheme, language, toggleLanguage, login, t } = useApp();
+  
+  // Add a ref for the authentication timeout
+  const authTimeoutRef = useRef(null);
 
   // Set up Google Auth directly with Expo
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -21,16 +25,39 @@ const LoginScreen = () => {
   // Watch for response from Google auth
   useEffect(() => {
     if (response?.type === 'success') {
+      // Clear timeout if auth is successful
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
       handleGoogleResponse(response.authentication.accessToken);
-    } else if (response?.type === 'dismiss' || response?.type === 'cancel') {
+    } else if (response?.type === 'dismiss' || response?.type === 'cancel' || response?.type === 'error') {
+      // Clear timeout if auth is cancelled
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+      
       // Handle dismissal or cancellation by resetting loading state
       setLoading(false);
+      setLoginError(null); // Clear any error message too
     }
   }, [response]);
+
+  // Clean up timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleGoogleResponse = async (accessToken) => {
     try {
       setLoading(true);
+      setLoginError(null);
       
       // Fetch user info from Google
       const userInfoResponse = await fetch(
@@ -40,9 +67,16 @@ const LoginScreen = () => {
         }
       );
       
+      if (!userInfoResponse.ok) {
+        throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
+      }
+      
       const userInfo = await userInfoResponse.json();
       
       // Save user to MongoDB through our backend API
+      let dbUser = null;
+      let dbError = null;
+      
       try {
         const userData = {
           google_id: userInfo.id,
@@ -51,37 +85,36 @@ const LoginScreen = () => {
           picture: userInfo.picture
         };
         
-        // Create or update user via API
-        const dbUser = await createOrUpdateUser(userData);
-        console.log('User saved to database:', dbUser);
+        console.log("Attempting to save user data to backend...");
+        dbUser = await createOrUpdateUser(userData);
+        console.log('User successfully saved to database');
         
-        // Call the login function from context with the complete info
-        login({
-          ...userInfo,
-          accessToken,
-          mongodb_data: dbUser
-        });
       } catch (error) {
+        dbError = error;
         console.error('Error saving user to database:', error);
-        Alert.alert(
-          t('error'),
-          t('errorMessage'),
-          [{ text: 'OK' }],
-          { cancelable: true }
-        );
         
-        // Still proceed with login even if database save fails
-        login({
-          ...userInfo,
-          accessToken
-        });
+        // Don't show alert here, just store the error
+        setLoginError(`Backend error: ${error.message}`);
       }
       
+      // Proceed with login regardless of backend success
+      login({
+        ...userInfo,
+        accessToken,
+        mongodb_data: dbUser,
+        // Flag to indicate if we had database issues
+        db_error: dbError ? true : false
+      });
+      
+      // Clear loading state
+      setLoading(false);
+      
     } catch (error) {
-      console.error("Error getting user info:", error);
+      console.error("Error in Google authentication flow:", error);
+      setLoginError(error.message);
       Alert.alert(
         t('error'),
-        t('errorMessage'),
+        `${t('errorMessage')}: ${error.message}`,
         [{ text: 'OK' }],
         { cancelable: true }
       );
@@ -92,12 +125,30 @@ const LoginScreen = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
+      setLoginError(null);
+      
+      // Set a timeout to automatically reset the loading state after 20 seconds
+      // This handles cases where the response event might not fire properly
+      authTimeoutRef.current = setTimeout(() => {
+        console.log("Auth timeout triggered - resetting loading state");
+        setLoading(false);
+        setLoginError("Authentication timed out. Please try again.");
+        authTimeoutRef.current = null;
+      }, 20000);
+      
       await promptAsync();
     } catch (error) {
+      // Clear timeout if there's an error
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+      
       console.error("Error launching Google sign in:", error);
+      setLoginError(error.message);
       Alert.alert(
         t('error'),
-        "Couldn't start login: " + error.message,
+        `${t('errorMessage')}: ${error.message}`,
         [{ text: 'OK' }],
         { cancelable: true }
       );
@@ -134,7 +185,10 @@ const LoginScreen = () => {
         </Text>
         
         <TouchableOpacity 
-          style={styles.googleButton}
+          style={[
+            styles.googleButton,
+            loading && styles.disabledButton
+          ]}
           onPress={handleGoogleLogin}
           disabled={loading}
         >
@@ -156,6 +210,15 @@ const LoginScreen = () => {
             { color: isDarkMode ? '#fff' : '#000' }
           ]}>
             {t('loading')}
+          </Text>
+        )}
+        
+        {loginError && (
+          <Text style={[
+            styles.errorText,
+            { color: isDarkMode ? '#ff6666' : '#cc0000' }
+          ]}>
+            {loginError}
           </Text>
         )}
       </View>
@@ -226,6 +289,10 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 20,
   },
+  disabledButton: {
+    borderColor: '#888',
+    opacity: 0.7,
+  },
   googleIcon: {
     width: 24,
     height: 24,
@@ -237,6 +304,13 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 20,
     fontSize: 16,
+    textAlign: 'center',
+  },
+  errorText: {
+    marginTop: 20,
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 10,
   },
   footer: {
     width: '100%',
@@ -258,7 +332,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: 'white',
     fontSize: 16,
-  },
+  }
 });
 
 export default LoginScreen;

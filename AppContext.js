@@ -10,30 +10,50 @@ export const AppProvider = ({ children }) => {
   const [language, setLanguage] = useState('es'); // Default is Spanish
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Load saved preferences on mount
   useEffect(() => {
     const loadSavedPreferences = async () => {
       try {
+        setLoading(true);
+        setError(null);
+        
         // Load theme preference
-        const savedTheme = await AsyncStorage.getItem('@theme');
-        if (savedTheme !== null) {
-          setIsDarkMode(savedTheme === 'dark');
+        try {
+          const savedTheme = await AsyncStorage.getItem('@theme');
+          if (savedTheme !== null) {
+            setIsDarkMode(savedTheme === 'dark');
+          }
+        } catch (e) {
+          console.warn("Error loading theme preference:", e);
+          // Continue with default theme
         }
 
         // Load language preference
-        const savedLanguage = await AsyncStorage.getItem('@language');
-        if (savedLanguage !== null) {
-          setLanguage(savedLanguage);
+        try {
+          const savedLanguage = await AsyncStorage.getItem('@language');
+          if (savedLanguage !== null) {
+            setLanguage(savedLanguage);
+          }
+        } catch (e) {
+          console.warn("Error loading language preference:", e);
+          // Continue with default language
         }
 
         // Load user data
-        const jsonValue = await AsyncStorage.getItem('@user');
-        if (jsonValue !== null) {
-          setUser(JSON.parse(jsonValue));
+        try {
+          const jsonValue = await AsyncStorage.getItem('@user');
+          if (jsonValue !== null) {
+            setUser(JSON.parse(jsonValue));
+          }
+        } catch (e) {
+          console.error("Error loading user data:", e);
+          setError("Failed to load user data. You may need to log in again.");
         }
       } catch (e) {
-        console.error("Error loading saved preferences:", e);
+        console.error("Error in loadSavedPreferences:", e);
+        setError("An error occurred while loading app preferences.");
       } finally {
         setLoading(false);
       }
@@ -42,7 +62,7 @@ export const AppProvider = ({ children }) => {
     loadSavedPreferences();
   }, []);
 
-  // Toggle theme function
+  // Toggle theme function with error handling
   const toggleTheme = async () => {
     try {
       const newTheme = isDarkMode ? 'light' : 'dark';
@@ -50,10 +70,12 @@ export const AppProvider = ({ children }) => {
       setIsDarkMode(!isDarkMode);
     } catch (e) {
       console.error("Error saving theme preference:", e);
+      // Still toggle the theme in memory even if saving fails
+      setIsDarkMode(!isDarkMode);
     }
   };
 
-  // Toggle language function
+  // Toggle language function with error handling
   const toggleLanguage = async () => {
     try {
       const newLanguage = language === 'en' ? 'es' : 'en';
@@ -61,30 +83,60 @@ export const AppProvider = ({ children }) => {
       setLanguage(newLanguage);
     } catch (e) {
       console.error("Error saving language preference:", e);
+      // Still toggle the language in memory even if saving fails
+      setLanguage(language === 'en' ? 'es' : 'en');
     }
   };
 
-  // Login function
+  // Login function with better error handling
   const login = async (userData) => {
     try {
-      await AsyncStorage.setItem('@user', JSON.stringify(userData));
+      if (!userData) {
+        throw new Error("No user data provided");
+      }
+      
+      // Log login attempt, but hide sensitive info
+      console.log(`Login attempt for user: ${userData.name}, ID: ${userData.id}`);
+      
+      // Store the user data
+      const jsonValue = JSON.stringify(userData);
+      await AsyncStorage.setItem('@user', jsonValue);
       setUser(userData);
+      
+      // Clear any existing error
+      setError(null);
+      
+      console.log("User logged in successfully");
     } catch (e) {
       console.error("Error saving user data:", e);
+      
+      // Set the user in memory even if AsyncStorage fails
+      // This lets the app work for the current session
+      setUser(userData);
+      
+      // Set an error that can be displayed if needed
+      setError("Failed to save login information. Your login may not persist after closing the app.");
     }
   };
 
-  // Logout function
+  // Logout function with error handling
   const logout = async () => {
     try {
       await AsyncStorage.removeItem('@user');
       setUser(null);
+      console.log("User logged out successfully");
     } catch (e) {
       console.error("Error removing user data:", e);
+      
+      // Force logout even if AsyncStorage fails
+      setUser(null);
+      
+      // Set an error that can be displayed if needed
+      setError("Failed to completely clear login data. Please restart the app.");
     }
   };
 
-  // Translation object - expanded with sports-related translations
+  // Translation object - expanded with sports-related translations and error messages
   const translations = {
     en: {
       login: "LOGIN",
@@ -128,9 +180,17 @@ export const AppProvider = ({ children }) => {
       time: "Time",
       venue: "Venue",
       noResults: "No results found",
-      tryAgain: "Try again with different keywords",
+      tryAgain: "Try again",
       error: "Error",
-      errorMessage: "Something went wrong. Please try again."
+      errorMessage: "Something went wrong. Please try again.",
+      databaseError: "Cannot connect to the database. Your favorite players and teams might not be available.",
+      networkError: "Network error. Please check your internet connection.",
+      loginError: "Login error. Please try again.",
+      retry: "Retry",
+      connectionError: "Connection error",
+      serverError: "Server error",
+      skip: "Skip",
+      continue: "Continue"
     },
     es: {
       login: "INICIAR SESIÓN",
@@ -174,9 +234,17 @@ export const AppProvider = ({ children }) => {
       time: "Hora",
       venue: "Lugar",
       noResults: "No se encontraron resultados",
-      tryAgain: "Intenta de nuevo con otras palabras clave",
+      tryAgain: "Intentar de nuevo",
       error: "Error",
-      errorMessage: "Algo salió mal. Por favor, inténtalo de nuevo."
+      errorMessage: "Algo salió mal. Por favor, inténtalo de nuevo.",
+      databaseError: "No se puede conectar a la base de datos. Es posible que tus jugadores y equipos favoritos no estén disponibles.",
+      networkError: "Error de red. Por favor, verifica tu conexión a internet.",
+      loginError: "Error de inicio de sesión. Por favor, inténtalo de nuevo.",
+      retry: "Reintentar",
+      connectionError: "Error de conexión",
+      serverError: "Error del servidor",
+      skip: "Omitir",
+      continue: "Continuar"
     }
   };
 
@@ -194,6 +262,8 @@ export const AppProvider = ({ children }) => {
     login,
     logout,
     loading,
+    error,
+    setError,
     t
   };
 
