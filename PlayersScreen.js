@@ -281,17 +281,21 @@ const PlayersScreen = () => {
   };
 
   // Toggle a player in favorites - VERSIÓN MEJORADA
-  const toggleFavorite = async (player) => {
+// Toggle a player in favorites
+const toggleFavorite = async (player) => {
     if (!user || !user.id) {
       // Handle not logged in
       setError(t('loginToFavorite'));
       return;
     }
-
+  
     try {
       setLoading(true);
       
-      if (isPlayerInFavorites(player.idPlayer)) {
+      // Determinar estado actual
+      const isCurrentlyFavorite = isPlayerInFavorites(player.idPlayer);
+      
+      if (isCurrentlyFavorite) {
         // Remove from favorites
         await removeFavoritePlayer(user.id, player.idPlayer);
         // Update local state
@@ -313,18 +317,68 @@ const PlayersScreen = () => {
         setFavorites(prevFavorites => [...prevFavorites, playerData]);
       }
       
-      // Actualizar selectedPlayer si es el mismo jugador
+      // Crear un nuevo estado de favorito para usar en actualizaciones
+      const newFavoriteStatus = !isCurrentlyFavorite;
+      
+      // Actualizar jugador seleccionado si existe
       if (selectedPlayer && selectedPlayer.idPlayer === player.idPlayer) {
-        setSelectedPlayer({...selectedPlayer});
+        setSelectedPlayer(prev => ({
+          ...prev,
+          isFavorite: newFavoriteStatus
+        }));
       }
       
-      // Forzar refresco de las listas para que se actualice el estado de favoritos
-      if (searchResults.length > 0) {
-        setSearchResults([...searchResults]);
-      }
+      // Actualizar las listas de jugadores para reflejar el nuevo estado
+      // 1. Actualizar jugadores populares
+      setPopularPlayers(prevPlayers => 
+        prevPlayers.map(p => 
+          p.idPlayer === player.idPlayer 
+            ? {...p, isFavorite: newFavoriteStatus} 
+            : p
+        )
+      );
       
-      if (popularPlayers.length > 0) {
-        setPopularPlayers([...popularPlayers]);
+      // 2. Actualizar resultados de búsqueda
+      setSearchResults(prevResults => 
+        prevResults.map(p => 
+          p.idPlayer === player.idPlayer 
+            ? {...p, isFavorite: newFavoriteStatus} 
+            : p
+        )
+      );
+      
+      // 3. Actualizar TODA la caché de jugadores
+      setPlayersCache(prevCache => {
+        const newCache = {...prevCache};
+        
+        // Recorrer todas las páginas de la caché
+        Object.keys(newCache).forEach(pageKey => {
+          // Actualizar los jugadores en cada página
+          newCache[pageKey] = newCache[pageKey].map(p => 
+            p.idPlayer === player.idPlayer 
+              ? {...p, isFavorite: newFavoriteStatus} 
+              : p
+          );
+        });
+        
+        return newCache;
+      });
+      
+      // También actualizar la caché de búsqueda si existe
+      if (searchCache && Object.keys(searchCache).length > 0) {
+        setSearchCache(prevCache => {
+          const newCache = {...prevCache};
+          
+          Object.keys(newCache).forEach(pageKey => {
+            newCache[pageKey] = newCache[pageKey].map(p => 
+              p.idPlayer === player.idPlayer 
+                ? {...p, isFavorite: newFavoriteStatus} 
+                : p
+            );
+          });
+          
+          return newCache;
+        });
       }
       
       setLoading(false);
@@ -390,15 +444,15 @@ const PlayersScreen = () => {
           />
         )}
         <TouchableOpacity
-          style={[
+        style={[
             styles.favoriteButton,
             { backgroundColor: isPlayerInFavorites(item.idPlayer) ? '#e74c3c' : '#2ecc71' }
-          ]}
-          onPress={() => toggleFavorite(item)}
+        ]}
+        onPress={() => toggleFavorite(item)}
         >
-          <Text style={styles.favoriteButtonText}>
+        <Text style={styles.favoriteButtonText}>
             {isPlayerInFavorites(item.idPlayer) ? '★' : '☆'}
-          </Text>
+        </Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -540,18 +594,18 @@ const PlayersScreen = () => {
       </View>
       
       <TouchableOpacity
-        style={[
-          styles.favoriteDetailButton,
-          { backgroundColor: isPlayerInFavorites(selectedPlayer.idPlayer) ? '#e74c3c' : '#2ecc71' }
-        ]}
-        onPress={() => toggleFavorite(selectedPlayer)}
-      >
-        <Text style={styles.favoriteDetailButtonText}>
-          {isPlayerInFavorites(selectedPlayer.idPlayer) 
-            ? t('removeFromFavorites') 
-            : t('addToFavorites')}
-        </Text>
-      </TouchableOpacity>
+            style={[
+                styles.favoriteDetailButton,
+                { backgroundColor: isPlayerInFavorites(selectedPlayer.idPlayer) ? '#e74c3c' : '#2ecc71' }
+            ]}
+            onPress={() => toggleFavorite(selectedPlayer)}
+            >
+            <Text style={styles.favoriteDetailButtonText}>
+                {isPlayerInFavorites(selectedPlayer.idPlayer) 
+                ? t('removeFromFavorites') 
+                : t('addToFavorites')}
+            </Text>
+        </TouchableOpacity>
     </View>
   );
 

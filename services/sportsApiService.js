@@ -9,6 +9,13 @@ const handleApiError = (error) => {
   throw error;
 };
 
+const EXCLUDED_TERMS = [
+    'Manager', 'Coach', 'Assistant', 'Wrestler', 'Boxing', 'Commentator',
+    'Gymnastics', 'American Football', 'Rugby', 'Announcer', 'Presenter', 'MMA',
+    'Baseball', 'Basketball', 'Ice Hockey', 'Tennis', 'Golf', 'Cycling',
+    'Swimming', 'Cricket', 'Volleyball', 'Racing Driver'
+];
+
 // Define the top 5 leagues and some popular teams
 const TOP_LEAGUES = [
     { 
@@ -56,28 +63,73 @@ const isCacheValid = () => {
   return (Date.now() - lastFetchTime) < CACHE_EXPIRY;
 };
 
-// Function to search players by name with sport filter option
-export const searchPlayersByName = async (playerName, sport = null) => {
-    try {
-        // Base URL for search
-        let searchUrl = `${API_BASE_URL}/${API_KEY}/searchplayers.php?p=${playerName}`;
-        
-        // Add sport filter if provided
-        if (sport) {
-        searchUrl += `&s=${sport}`;
-        }
-        
-        const response = await fetch(searchUrl);
-        if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `API error: ${response.status}`);
-        }
-        const data = await response.json();
-        return data.player || [];
-    } catch (error) {
-        return handleApiError(error);
+// Función de filtrado - también va en sportsApiService.js:
+const isSoccerPlayer = (player) => {
+    if (!player || !player.strPosition) {
+      return false;
     }
-};
+    
+    const position = player.strPosition.toLowerCase();
+    for (const excluded of EXCLUDED_TERMS) {
+      if (position.includes(excluded.toLowerCase())) {
+        return false;
+      }
+    }
+    
+    if (player.strSport && player.strSport !== 'Soccer') {
+      return false;
+    }
+    
+    return true;
+  };
+
+// Function to search players by name with sport filter option
+export const searchPlayersByName = async (playerName) => {
+    try {
+      const searchTerms = [];
+      searchTerms.push(playerName);
+      
+      if (playerName.includes(' ')) {
+        const nameParts = playerName.split(' ');
+        if (nameParts[0].length > 2) {
+          searchTerms.push(nameParts[0]);
+        }
+        if (nameParts[nameParts.length - 1].length > 2) {
+          searchTerms.push(nameParts[nameParts.length - 1]);
+        }
+      }
+      
+      const searchPromises = searchTerms.map(term => 
+        fetch(`${API_BASE_URL}/${API_KEY}/searchplayers.php?p=${term}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`API error: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => data.player || [])
+      );
+      
+      const resultsArrays = await Promise.all(searchPromises);
+      
+      let allPlayers = [];
+      const playerIds = new Set();
+      
+      resultsArrays.forEach(players => {
+        players.forEach(player => {
+          if (!playerIds.has(player.idPlayer) && isSoccerPlayer(player)) {
+            playerIds.add(player.idPlayer);
+            allPlayers.push(player);
+          }
+        });
+      });
+      
+      return allPlayers;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  };
+  
 
 // Get players from a team
 export const getTeamPlayers = async (teamId) => {
@@ -236,23 +288,26 @@ export const getPopularPlayers = async (limit = 20, offset = 0) => {
       // Procesar todas las promesas
       const playersArrays = await Promise.all(playerPromises);
       
-      // Aplanar y recopilar todos los jugadores
-      let allPlayers = [];
-      playersArrays.forEach((players, index) => {
+        // Aplanar y recopilar todos los jugadores
+        let allPlayers = [];
+        playersArrays.forEach((players, index) => {
         if (players && players.length) {
-          // Agregar jugadores con información adicional de la liga
-          const teamName = selectedTeams[index].strTeam;
-          const playersWithTeam = players.map(player => ({
+            // Filtrar solo jugadores de fútbol
+            const soccerPlayers = players.filter(player => isSoccerPlayer(player));
+            
+            // Agregar jugadores con información adicional
+            const teamName = selectedTeams[index].strTeam;
+            const playersWithTeam = soccerPlayers.map(player => ({
             ...player,
-            popularityScore: players.length - index, // Métrica de popularidad simple
-            teamName, // Agregar el nombre del equipo como referencia
+            popularityScore: soccerPlayers.length - index,
+            teamName,
             strLeague: selectedLeague.league,
             leagueId: selectedLeague.leagueId,
             strLeagueBadge: selectedLeague.badge
-          }));
-          allPlayers = [...allPlayers, ...playersWithTeam];
+            }));
+            allPlayers = [...allPlayers, ...playersWithTeam];
         }
-      });
+        });
       
       // Ordenar por nuestra "puntuación de popularidad" arbitraria y aleatorizar un poco
       allPlayers.sort((a, b) => {
