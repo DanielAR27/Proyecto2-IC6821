@@ -1,12 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import LoginScreen from './LoginScreen';
-import AppContent from './AppContent';
-import { AppProvider, useApp } from './AppContext';
+import { useApp } from './AppContext';
+import UserScreen from './UserScreen';
+import PlayersScreen from './PlayersScreen';
+import TeamsScreen from './TeamsScreen';
 
-// Main App component that uses context
-const MainApp = () => {
-  const { user, loading, isDarkMode, t } = useApp();
+const AppContent = () => {
+  const { user, loading, isDarkMode, t, activeScreen } = useApp();
 
   // Show loading state
   if (loading) {
@@ -27,21 +27,20 @@ const MainApp = () => {
 
   // If no user is logged in, show login screen
   if (!user) {
-    return <LoginScreen />;
+    return null; // El LoginScreen lo manejará App.js
   }
 
-  // User is logged in, show app content which handles the screens
-  return <AppContent />;
+  // Render la pantalla correspondiente según el estado activeScreen
+  switch (activeScreen) {
+    case 'Players':
+      return <PlayersScreen />;
+    case 'Teams':
+      return <TeamsScreen />;
+    case 'User':
+    default:
+      return <UserScreen />;
+  }
 };
-
-// Root component that provides App context
-export default function App() {
-  return (
-    <AppProvider>
-      <MainApp />
-    </AppProvider>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -53,3 +52,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
   }
 });
+
+export default AppContent;

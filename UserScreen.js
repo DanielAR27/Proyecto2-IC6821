@@ -12,7 +12,7 @@ import { getUserByGoogleId } from './services/apiService';
 import AppHeader from './components/AppHeader';
 
 const UserScreen = () => {
-  const { isDarkMode, toggleTheme, language, toggleLanguage, user, logout, t } = useApp();
+  const { isDarkMode, toggleTheme, language, toggleLanguage, user, logout, t, navigateTo } = useApp();
   const [mongoUser, setMongoUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,11 +22,11 @@ const UserScreen = () => {
   const sidebarItems = [
     {
       label: t('watchPlayers'),
-      onPress: () => console.log('Navigate to Players Screen')
+      onPress: () => navigateTo('Players')
     },
     {
       label: t('watchTeams'),
-      onPress: () => console.log('Navigate to Teams Screen')
+      onPress: () => navigateTo('Teams')
     }
   ];
 

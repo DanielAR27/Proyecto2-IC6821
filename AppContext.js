@@ -11,6 +11,10 @@ export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Estado para la navegación
+  const [activeScreen, setActiveScreen] = useState('User');
+  const [screenHistory, setScreenHistory] = useState(['User']);
 
   // Load saved preferences on mount
   useEffect(() => {
@@ -136,6 +140,25 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Función para navegar a otra pantalla
+  const navigateTo = (screenName) => {
+    setActiveScreen(screenName);
+    setScreenHistory(prev => [...prev, screenName]);
+  };
+
+  // Función para volver a la pantalla anterior
+  const goBack = () => {
+    if (screenHistory.length > 1) {
+      // Elimina la pantalla actual y obtiene la anterior
+      const newHistory = [...screenHistory];
+      newHistory.pop();
+      const previousScreen = newHistory[newHistory.length - 1];
+      
+      setActiveScreen(previousScreen);
+      setScreenHistory(newHistory);
+    }
+  };
+
   // Translation object - expanded with sports-related translations and error messages
   const translations = {
     en: {
@@ -190,7 +213,23 @@ export const AppProvider = ({ children }) => {
       connectionError: "Connection error",
       serverError: "Server error",
       skip: "Skip",
-      continue: "Continue"
+      continue: "Continue",
+      // Nuevas claves para Players y Teams
+      players: "Players",
+      teams: "Teams",
+      home: "Home",
+      previous: "Previous",
+      next: "Next",
+      searchResults: "Search Results",
+      popularPlayers: "Popular Players",
+      popularTeams: "Popular Teams",
+      noPlayers: "No players found",
+      noTeams: "No teams found",
+      back: "Back",
+      loginToFavorite: "Please log in to add favorites",
+      searchPlayers: "Search Players",
+      searchTeams: "Search Teams",
+      showFavorites: "Show Favorites"
     },
     es: {
       login: "INICIAR SESIÓN",
@@ -244,7 +283,23 @@ export const AppProvider = ({ children }) => {
       connectionError: "Error de conexión",
       serverError: "Error del servidor",
       skip: "Omitir",
-      continue: "Continuar"
+      continue: "Continuar",
+      // Nuevas claves para Players y Teams
+      players: "Jugadores",
+      teams: "Equipos",
+      home: "Inicio",
+      previous: "Anterior",
+      next: "Siguiente",
+      searchResults: "Resultados de Búsqueda",
+      popularPlayers: "Jugadores Populares",
+      popularTeams: "Equipos Populares",
+      noPlayers: "No se encontraron jugadores",
+      noTeams: "No se encontraron equipos",
+      back: "Volver",
+      loginToFavorite: "Inicia sesión para añadir favoritos",
+      searchPlayers: "Buscar Jugadores",
+      searchTeams: "Buscar Equipos",
+      showFavorites: "Mostrar Favoritos"
     }
   };
 
@@ -264,7 +319,11 @@ export const AppProvider = ({ children }) => {
     loading,
     error,
     setError,
-    t
+    t,
+    // Navegación
+    activeScreen,
+    navigateTo,
+    goBack
   };
 
   return (
