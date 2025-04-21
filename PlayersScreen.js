@@ -42,14 +42,17 @@ const getPlayerDetailImage = (player) => {
 };
 
 const PlayersScreen = () => {
-  const { isDarkMode, user, t, navigateTo, language, toggleLanguage, toggleTheme, logout } = useApp();
+  const { isDarkMode, user, t, navigateTo, language, toggleLanguage, toggleTheme, logout,
+    isPlayerInFavorites,
+    addPlayerToFavorites,
+    removePlayerFromFavorites
+   } = useApp();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [popularPlayers, setPopularPlayers] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [favorites, setFavorites] = useState([]);
   const [error, setError] = useState(null);
   const [searchCache, setSearchCache] = useState({});
   
@@ -86,13 +89,10 @@ const PlayersScreen = () => {
     }
   ];
 
-  // Load popular players on initial mount
+  // Reemplazar con:
   useEffect(() => {
     loadPopularPlayers();
-    if (user && user.mongodb_data && user.mongodb_data.favorite_players) {
-      setFavorites(user.mongodb_data.favorite_players);
-    }
-  }, [user]); 
+  }, [user]);
 
   // Function to load popular players with pagination
   const loadPopularPlayers = async (offset = 0) => {
@@ -275,85 +275,87 @@ const PlayersScreen = () => {
     }
   };
 
-  // Check if a player is in favorites
-  const isPlayerInFavorites = (playerId) => {
-    return favorites.some(favPlayer => favPlayer.player_id === playerId);
-  };
-
   // Toggle a player in favorites - VERSIÓN MEJORADA
 // Toggle a player in favorites
 const toggleFavorite = async (player) => {
-    if (!user || !user.id) {
-      // Handle not logged in
-      setError(t('loginToFavorite'));
-      return;
+  if (!user || !user.id) {
+    setError(t('loginToFavorite'));
+    return;
+  }
+
+  try {
+    setLoading(true);
+    
+    // Determinar estado actual
+    const isCurrentlyFavorite = isPlayerInFavorites(player.idPlayer);
+    
+    let result;
+    if (isCurrentlyFavorite) {
+      // Remove from favorites
+      result = await removePlayerFromFavorites(player.idPlayer);
+    } else {
+      // Add to favorites
+      result = await addPlayerToFavorites(player);
     }
-  
-    try {
-      setLoading(true);
+    
+    if (!result.success) {
+      throw new Error(result.error || t('errorMessage'));
+    }
+    
+    // Actualizar las listas de jugadores para reflejar el nuevo estado de favorito
+    // Esto no es necesario si todas las pantallas consultan el estado global
+    const newFavoriteStatus = !isCurrentlyFavorite;
+    
+    // Actualizar jugador seleccionado si existe
+    if (selectedPlayer && selectedPlayer.idPlayer === player.idPlayer) {
+      setSelectedPlayer(prev => ({
+        ...prev,
+        isFavorite: newFavoriteStatus
+      }));
+    }
+    
+    // Actualizar las listas de jugadores para mantener la UI sincronizada
+    // 1. Actualizar jugadores populares
+    setPopularPlayers(prevPlayers => 
+      prevPlayers.map(p => 
+        p.idPlayer === player.idPlayer 
+          ? {...p, isFavorite: newFavoriteStatus} 
+          : p
+      )
+    );
+    
+    // 2. Actualizar resultados de búsqueda
+    setSearchResults(prevResults => 
+      prevResults.map(p => 
+        p.idPlayer === player.idPlayer 
+          ? {...p, isFavorite: newFavoriteStatus} 
+          : p
+      )
+    );
+    
+    // 3. Actualizar TODA la caché de jugadores
+    setPlayersCache(prevCache => {
+      const newCache = {...prevCache};
       
-      // Determinar estado actual
-      const isCurrentlyFavorite = isPlayerInFavorites(player.idPlayer);
-      
-      if (isCurrentlyFavorite) {
-        // Remove from favorites
-        await removeFavoritePlayer(user.id, player.idPlayer);
-        // Update local state
-        setFavorites(prevFavorites => 
-          prevFavorites.filter(fav => fav.player_id !== player.idPlayer)
+      // Recorrer todas las páginas de la caché
+      Object.keys(newCache).forEach(pageKey => {
+        // Actualizar los jugadores en cada página
+        newCache[pageKey] = newCache[pageKey].map(p => 
+          p.idPlayer === player.idPlayer 
+            ? {...p, isFavorite: newFavoriteStatus} 
+            : p
         );
-      } else {
-        // Add to favorites
-        const playerData = {
-          player_id: player.idPlayer,
-          player_name: player.strPlayer,
-          team_name: player.strTeam,
-          player_thumb: player.strThumb
-        };
-        
-        await addFavoritePlayer(user.id, playerData);
-        
-        // Update local state
-        setFavorites(prevFavorites => [...prevFavorites, playerData]);
-      }
+      });
       
-      // Crear un nuevo estado de favorito para usar en actualizaciones
-      const newFavoriteStatus = !isCurrentlyFavorite;
-      
-      // Actualizar jugador seleccionado si existe
-      if (selectedPlayer && selectedPlayer.idPlayer === player.idPlayer) {
-        setSelectedPlayer(prev => ({
-          ...prev,
-          isFavorite: newFavoriteStatus
-        }));
-      }
-      
-      // Actualizar las listas de jugadores para reflejar el nuevo estado
-      // 1. Actualizar jugadores populares
-      setPopularPlayers(prevPlayers => 
-        prevPlayers.map(p => 
-          p.idPlayer === player.idPlayer 
-            ? {...p, isFavorite: newFavoriteStatus} 
-            : p
-        )
-      );
-      
-      // 2. Actualizar resultados de búsqueda
-      setSearchResults(prevResults => 
-        prevResults.map(p => 
-          p.idPlayer === player.idPlayer 
-            ? {...p, isFavorite: newFavoriteStatus} 
-            : p
-        )
-      );
-      
-      // 3. Actualizar TODA la caché de jugadores
-      setPlayersCache(prevCache => {
+      return newCache;
+    });
+    
+    // También actualizar la caché de búsqueda si existe
+    if (searchCache && Object.keys(searchCache).length > 0) {
+      setSearchCache(prevCache => {
         const newCache = {...prevCache};
         
-        // Recorrer todas las páginas de la caché
         Object.keys(newCache).forEach(pageKey => {
-          // Actualizar los jugadores en cada página
           newCache[pageKey] = newCache[pageKey].map(p => 
             p.idPlayer === player.idPlayer 
               ? {...p, isFavorite: newFavoriteStatus} 
@@ -363,31 +365,15 @@ const toggleFavorite = async (player) => {
         
         return newCache;
       });
-      
-      // También actualizar la caché de búsqueda si existe
-      if (searchCache && Object.keys(searchCache).length > 0) {
-        setSearchCache(prevCache => {
-          const newCache = {...prevCache};
-          
-          Object.keys(newCache).forEach(pageKey => {
-            newCache[pageKey] = newCache[pageKey].map(p => 
-              p.idPlayer === player.idPlayer 
-                ? {...p, isFavorite: newFavoriteStatus} 
-                : p
-            );
-          });
-          
-          return newCache;
-        });
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error updating favorites:', error);
-      setError(error.message || t('errorMessage'));
-      setLoading(false);
     }
-  };
+    
+    setLoading(false);
+  } catch (error) {
+    console.error('Error updating favorites:', error);
+    setError(error.message || t('errorMessage'));
+    setLoading(false);
+  }
+};
 
   // Render a player item in list
   const renderPlayerItem = ({ item }) => (
@@ -1020,7 +1006,7 @@ const styles = StyleSheet.create({
   pageIndicator: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
+  }
 });
 
 export default PlayersScreen;

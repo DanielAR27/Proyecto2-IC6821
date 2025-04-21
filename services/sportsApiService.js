@@ -16,8 +16,8 @@ const EXCLUDED_TERMS = [
     'Swimming', 'Cricket', 'Volleyball', 'Racing Driver'
 ];
 
-// Define the top 5 leagues and some popular teams
-const TOP_LEAGUES = [
+// Define the top 5 leagues and some popular teams - Exportar esta constante
+export const TOP_LEAGUES = [
     { 
       country: 'England', 
       league: 'English Premier League', 
@@ -28,7 +28,7 @@ const TOP_LEAGUES = [
       country: 'Spain', 
       league: 'Spanish La Liga', 
       leagueId: 4335,
-      badge: 'https://www.thesportsdb.com/images/media/league/badge/7onmyv1534768460.png'
+      badge: 'https://www.thesportsdb.com/images/media/league/badge/ja4it51687628717.png'
     },
     { 
       country: 'Germany', 
@@ -40,7 +40,7 @@ const TOP_LEAGUES = [
       country: 'Italy', 
       league: 'Italian Serie A', 
       leagueId: 4332,
-      badge: 'https://www.thesportsdb.com/images/media/league/badge/ocy2fe1591122558.png'
+      badge: 'https://www.thesportsdb.com/images/media/league/badge/67q3q21679951383.png'
     },
     { 
       country: 'France', 
@@ -48,7 +48,7 @@ const TOP_LEAGUES = [
       leagueId: 4334,
       badge: 'https://www.thesportsdb.com/images/media/league/badge/8f5jmf1516458074.png'
     }
-  ];
+];
 
 // Cache for storing popular players to minimize API calls
 let popularPlayersCache = {};
@@ -56,6 +56,9 @@ let teamPlayersCache = {};
 let lastSelectedLeague = null;
 let lastFetchTime = null;
 const CACHE_EXPIRY = 1000 * 60 * 30; // 30 minutes
+
+// Cache para los equipos y ligas
+let teamsCache = {};
 
 // Check if cache needs refresh
 const isCacheValid = () => {
@@ -81,7 +84,7 @@ const isSoccerPlayer = (player) => {
     }
     
     return true;
-  };
+};
 
 // Function to search players by name with sport filter option
 export const searchPlayersByName = async (playerName) => {
@@ -128,7 +131,7 @@ export const searchPlayersByName = async (playerName) => {
     } catch (error) {
       return handleApiError(error);
     }
-  };
+};
   
 
 // Get players from a team
@@ -334,7 +337,7 @@ export const getPopularPlayers = async (limit = 20, offset = 0) => {
       console.error('Error al obtener jugadores populares:', error);
       return [];
     }
-  };
+};
 
 // Search for all leagues in a country
 export const getLeaguesByCountry = async (country, sport = null) => {
@@ -360,6 +363,12 @@ export const getLeaguesByCountry = async (country, sport = null) => {
 // Get all teams in a league
 export const getTeamsByLeague = async (leagueName) => {
   try {
+    // Verificar la caché primero
+    const cacheKey = `league_${leagueName}`;
+    if (teamsCache[cacheKey] && isCacheValid()) {
+      return teamsCache[cacheKey];
+    }
+    
     // URL encode the league name
     const encodedLeagueName = encodeURIComponent(leagueName);
     
@@ -370,7 +379,43 @@ export const getTeamsByLeague = async (leagueName) => {
     }
     
     const data = await response.json();
-    return data.teams || [];
+    const teams = data.teams || [];
+    
+    // Guardar en caché
+    teamsCache[cacheKey] = teams;
+    lastFetchTime = Date.now();
+    
+    return teams;
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Obtener información detallada de un equipo
+export const getTeamDetails = async (teamId) => {
+  try {
+    // Verificar la caché primero
+    const cacheKey = `team_${teamId}`;
+    if (teamsCache[cacheKey] && isCacheValid()) {
+      return teamsCache[cacheKey];
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/lookupteam.php?id=${teamId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const team = data.teams && data.teams.length > 0 ? data.teams[0] : null;
+    
+    // Guardar en caché
+    if (team) {
+      teamsCache[cacheKey] = team;
+      lastFetchTime = Date.now();
+    }
+    
+    return team;
   } catch (error) {
     return handleApiError(error);
   }
@@ -379,6 +424,12 @@ export const getTeamsByLeague = async (leagueName) => {
 // Search for teams by name
 export const searchTeamsByName = async (teamName) => {
   try {
+    // Verificar si está en caché
+    const cacheKey = `search_${teamName.toLowerCase()}`;
+    if (teamsCache[cacheKey] && isCacheValid()) {
+      return teamsCache[cacheKey];
+    }
+    
     const response = await fetch(`${API_BASE_URL}/${API_KEY}/searchteams.php?t=${teamName}`);
     if (!response.ok) {
       const errorData = await response.json();
@@ -386,7 +437,13 @@ export const searchTeamsByName = async (teamName) => {
     }
     
     const data = await response.json();
-    return data.teams || [];
+    const teams = data.teams || [];
+    
+    // Guardar en caché
+    teamsCache[cacheKey] = teams;
+    lastFetchTime = Date.now();
+    
+    return teams;
   } catch (error) {
     return handleApiError(error);
   }
@@ -402,8 +459,127 @@ export const getPlayerThumbUrl = (player) => {
 
 // Utility function to get team badge URL 
 export const getTeamBadgeUrl = (team) => {
-  if (!team || !team.strTeamBadge) {
+  if (!team) {
     return 'https://www.thesportsdb.com/images/media/team/badge/defaultteam.png';
   }
-  return team.strTeamBadge;
+  
+  // Usar strBadge si existe
+  if (team.strBadge) {
+    return team.strBadge;
+  }
+  
+  // Usar strTeamBadge como alternativa
+  if (team.strTeamBadge) {
+    return team.strTeamBadge;
+  }
+  
+  // Imagen por defecto si no hay ninguna disponible
+  return 'https://www.thesportsdb.com/images/media/team/badge/defaultteam.png';
+};
+
+// Función para obtener camisetas de un equipo desde la API
+export const getTeamEquipment = async (teamId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/lookupequipment.php?id=${teamId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.equipment || [];
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Función para organizar las camisetas por temporada
+// Función mejorada para organizar camisetas por temporada
+export const organizeEquipmentBySeason = (equipment) => {
+  if (!equipment || !Array.isArray(equipment) || equipment.length === 0) {
+    return [];
+  }
+  
+  // Agrupar por temporada
+  const equipmentBySeason = {};
+  
+  equipment.forEach(item => {
+    if (!item.strSeason || !item.strEquipment) return;
+    
+    if (!equipmentBySeason[item.strSeason]) {
+      equipmentBySeason[item.strSeason] = [];
+    }
+    
+    // Normalizar el tipo (Home y 1st son el mismo tipo)
+    let normalizedType = item.strType;
+    if (normalizedType === 'Home') {
+      normalizedType = '1st';
+    }
+    
+    // Verificar si ya existe una camiseta del mismo tipo para esta temporada
+    // (en caso de duplicados, quedarse con la más reciente)
+    const existingIndex = equipmentBySeason[item.strSeason].findIndex(
+      e => e.normalizedType === normalizedType
+    );
+    
+    if (existingIndex >= 0) {
+      const existingDate = new Date(equipmentBySeason[item.strSeason][existingIndex].date);
+      const currentDate = new Date(item.date);
+      
+      // Reemplazar solo si es más reciente
+      if (currentDate > existingDate) {
+        equipmentBySeason[item.strSeason][existingIndex] = {
+          id: item.idEquipment,
+          image: item.strEquipment,
+          type: item.strType,
+          normalizedType,
+          date: item.date
+        };
+      }
+    } else {
+      // Añadir nueva camiseta
+      equipmentBySeason[item.strSeason].push({
+        id: item.idEquipment,
+        image: item.strEquipment,
+        type: item.strType,
+        normalizedType,
+        date: item.date
+      });
+    }
+  });
+  
+  // Función para comparar temporadas considerando rangos (ej: "2023-2024")
+  const compareSeasons = (a, b) => {
+    // Si ambas temporadas tienen el formato "YYYY-YYYY"
+    if (/^\d{4}-\d{4}$/.test(a) && /^\d{4}-\d{4}$/.test(b)) {
+      // Extraer el año final de cada temporada
+      const yearA = parseInt(a.split('-')[1], 10);
+      const yearB = parseInt(b.split('-')[1], 10);
+      return yearB - yearA; // Ordenar de más reciente a más antigua
+    }
+    
+    // Si tienen formato "YYYY"
+    if (/^\d{4}$/.test(a) && /^\d{4}$/.test(b)) {
+      return parseInt(b, 10) - parseInt(a, 10);
+    }
+    
+    // Ordenar alfabéticamente (caso por defecto)
+    return b.localeCompare(a);
+  };
+  
+  // Convertir a un array ordenado por temporada (la más reciente primero)
+  const seasons = Object.keys(equipmentBySeason).sort(compareSeasons);
+  
+  return seasons.map(season => {
+    // Ordenar camisetas por tipo (1st, 2nd, 3rd, 4th, 5th)
+    const sortedEquipment = equipmentBySeason[season].sort((a, b) => {
+      const typeOrder = { '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5 };
+      return (typeOrder[a.normalizedType] || 99) - (typeOrder[b.normalizedType] || 99);
+    });
+    
+    return {
+      season,
+      equipment: sortedEquipment
+    };
+  });
 };
