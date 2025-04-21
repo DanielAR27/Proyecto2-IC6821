@@ -14,6 +14,7 @@ Antes de comenzar, asegúrese de tener lo siguiente instalado:
   npm install -g expo-cli
   ```
 - [JDK (Java Development Kit)](https://adoptium.net/) preferiblemente la **versión 17**, requerida por Gradle para compilar el proyecto nativo en Android.
+  
   > Verifique que esté correctamente instalado ejecutando:
   > ```bash
   > java -version
