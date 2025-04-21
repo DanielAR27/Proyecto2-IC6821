@@ -9,10 +9,15 @@ Este proyecto utiliza React Native con Expo y soporte para compilación nativa u
 Antes de comenzar, asegúrese de tener lo siguiente instalado:
 
 - [Node.js](https://nodejs.org/) (recomendado: LTS)
-- [Expo CLI](https://docs.expo.dev/workflow/expo-cli/)  
+- [Expo CLI](https://docs.expo.dev/workflow/expo-cli/)
   ```bash
   npm install -g expo-cli
   ```
+- [JDK (Java Development Kit)](https://adoptium.net/) preferiblemente la **versión 17**, requerida por Gradle para compilar el proyecto nativo en Android.
+  > Verifique que esté correctamente instalado ejecutando:
+  > ```bash
+  > java -version
+  > ```
 - [Android Studio](https://developer.android.com/studio) con:
   - SDK de Android 33 o superior
   - Emulador o dispositivo físico conectado
@@ -25,8 +30,8 @@ Antes de comenzar, asegúrese de tener lo siguiente instalado:
 
 1. Clonar este repositorio:
    ```bash
-   git clone https://github.com/tu-usuario/tu-repo.git
-   cd tu-repo
+   git clone https://github.com/DanielAR27/Proyecto2-IC6821.git
+   cd Proyecto2-IC6821.
    ```
 
 2. Instalar las dependencias:
@@ -45,14 +50,6 @@ npx expo run:android --device
 ```
 
 Este comando compila y ejecuta la aplicación de forma nativa usando Gradle.
-
-### Opción 2: Usando Metro Bundler
-
-```bash
-npx expo start
-```
-
-Este comando abre el navegador con herramientas de desarrollo. Se puede escanear el código QR con la aplicación Expo Go si no se requiere compilación nativa.
 
 ---
 
