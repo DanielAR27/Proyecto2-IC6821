@@ -4,38 +4,32 @@ import { useApp } from './AppContext';
 import UserScreen from './UserScreen';
 import PlayersScreen from './PlayersScreen';
 import TeamsScreen from './TeamsScreen';
+import StatisticsScreen from './StatisticsScreen'; 
 
 const AppContent = () => {
-  const { user, loading, isDarkMode, t, activeScreen } = useApp();
+  const { user, loading, isDarkMode, t, activeScreen, routeParams } = useApp();
 
-  // Show loading state
   if (loading) {
     return (
-      <View style={[
-        styles.container, 
-        { backgroundColor: isDarkMode ? '#000' : '#fff' }
-      ]}>
-        <Text style={[
-          styles.loadingText,
-          { color: isDarkMode ? '#fff' : '#000' }
-        ]}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#000' : '#fff' }]}>
+        <Text style={[styles.loadingText, { color: isDarkMode ? '#fff' : '#000' }]}>
           {t('loading')}
         </Text>
       </View>
     );
   }
 
-  // If no user is logged in, show login screen
   if (!user) {
-    return null; // El LoginScreen lo manejará App.js
+    return null;
   }
 
-  // Render la pantalla correspondiente según el estado activeScreen
   switch (activeScreen) {
     case 'Players':
       return <PlayersScreen />;
     case 'Teams':
       return <TeamsScreen />;
+    case 'Statistics':
+      return <StatisticsScreen teamId={routeParams?.teamId} teamName={routeParams?.teamName} />;
     case 'User':
     default:
       return <UserScreen />;

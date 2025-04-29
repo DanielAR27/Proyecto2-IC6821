@@ -583,3 +583,15 @@ export const organizeEquipmentBySeason = (equipment) => {
     };
   });
 };
+
+// Obtener los últimos eventos (partidos) de un equipo
+export const getTeamLastEvents = async (teamId) => {
+  try {
+    const response = await fetch(`https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventslast.php?id=${teamId}`);
+    const data = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error('Error fetching last events:', error);
+    throw error;
+  }
+};

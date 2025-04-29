@@ -576,6 +576,21 @@ const TeamsScreen = () => {
             {t('viewJerseys')}
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.teamDetailAction, { backgroundColor: '#28a745' }]}
+          onPress={() => {
+            navigateTo('Statistics', { 
+              teamId: selectedTeam.idTeam, 
+              teamName: selectedTeam.strTeam 
+            });
+          }}
+        >
+          <Text style={styles.teamDetailActionText}>
+            {t('viewStatistics')}
+          </Text>
+        </TouchableOpacity>
+
       </View>
       
       <View style={styles.teamDetailInfo}>

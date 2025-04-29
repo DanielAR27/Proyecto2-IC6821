@@ -21,6 +21,8 @@ export const AppProvider = ({ children }) => {
   // Estado para la navegación
   const [activeScreen, setActiveScreen] = useState('User');
   const [screenHistory, setScreenHistory] = useState(['User']);
+  const [routeParams, setRouteParams] = useState(null);
+
   
   // Estado global para favoritos
   const [favoritePlayers, setFavoritePlayers] = useState([]);
@@ -177,10 +179,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // Función para navegar a otra pantalla
-  const navigateTo = (screenName) => {
+
+  const navigateTo = (screenName, params = null) => {
     setActiveScreen(screenName);
     setScreenHistory(prev => [...prev, screenName]);
+    setRouteParams(params); // Guardar los parámetros
   };
+  
 
   // Función para volver a la pantalla anterior
   const goBack = () => {
@@ -441,6 +446,13 @@ const translations = {
     searchPlayers: "Search Players",
     searchTeams: "Search Teams",
     showFavorites: "Show Favorites",
+    //Para statistics
+    // En "en"
+    viewStatistics: "View Statistics",
+
+    // En "es"
+    viewStatistics: "Ver Estadísticas",
+
     // Nuevas traducciones para TeamsScreen
     information: "Information",
     viewJerseys: "View Jerseys",
@@ -566,6 +578,7 @@ const translations = {
     activeScreen,
     navigateTo,
     goBack,
+    routeParams,
     // Favoritos
     favoritePlayers,
     favoriteTeams,
