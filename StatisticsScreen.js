@@ -5,7 +5,7 @@ import { getTeamStatistics } from './services/statisticsService';
 
 export default function StatisticsScreen() {
   const { isDarkMode, goBack, routeParams } = useApp();
-  const { teamId, teamName } = routeParams || {};  // AQUÍ usamos el parámetro guardado
+  const { teamId, teamName } = routeParams || {};  
 
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);

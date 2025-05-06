@@ -23,6 +23,9 @@ import {
   organizeEquipmentBySeason,
   TOP_LEAGUES
 } from './services/sportsApiService';
+import axios from 'axios';
+import { getUpcomingMatchesForTeam } from './services/sportsApiService';
+
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width / 2) - 25; // 2 cards per row with some margin
@@ -65,6 +68,8 @@ const TeamsScreen = () => {
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [seasonPickerVisible, setSeasonPickerVisible] = useState(false);
+  const [previousTeam, setPreviousTeam] = useState(null);
+
 
   // Sidebar menu items
   const sidebarItems = [
@@ -240,6 +245,21 @@ const TeamsScreen = () => {
     setRefreshing(false);
   };
 
+  const loadUpcomingMatchesForTeam = async (teamId) => {
+    try {
+      setLoading(true);
+      const matches = await getUpcomingMatchesForTeam(teamId);
+      setUpcomingMatches(matches);
+      setShowUpcoming(true);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading upcoming matches for team:', error);
+      setError(error.message || t('errorMessage'));
+      setLoading(false);
+    }
+  };
+  
+
   // Navigate to next page
   const goToNextPage = () => {
     const nextPage = currentPage + 1;
@@ -413,6 +433,27 @@ const TeamsScreen = () => {
     }
   };
   
+
+  const [upcomingMatches, setUpcomingMatches] = useState([]);
+  const [showUpcoming, setShowUpcoming] = useState(false);
+
+  const loadUpcomingMatches = async () => {
+    try {
+      setLoading(true);
+      console.log("selectedLeague:", selectedLeague); // <-- AQUÍ
+      const matches = await getUpcomingMatches(selectedLeague.idLeague);
+      console.warn("MATCHES API RESULT:", matches);   // <-- Y ESTE TAMBIÉN
+      setUpcomingMatches(matches);
+      setShowUpcoming(true);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading upcoming matches:', error);
+      setLoading(false);
+    }
+  };
+  
+  
+
   // Render a league item
   const renderLeagueItem = ({ item }) => (
     <TouchableOpacity
@@ -577,8 +618,25 @@ const TeamsScreen = () => {
           </Text>
         </TouchableOpacity>
 
+        {/* botón de partidos futuros */}
         <TouchableOpacity
-          style={[styles.teamDetailAction, { backgroundColor: '#28a745' }]}
+          style={[styles.teamDetailAction, { backgroundColor: '#ff9900' }]}
+          onPress={() => {
+            setPreviousTeam(selectedTeam);     // Guardar el equipo actual
+            setSelectedTeam(null);             // Ocultar los detalles mientras se cargan los partidos
+            loadUpcomingMatchesForTeam(selectedTeam.idTeam);
+          }}
+          
+        >
+          <Text style={styles.teamDetailActionText}>
+            {t('viewUpcomingMatches')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ alignItems: 'center', marginTop: 15 }}>
+        <TouchableOpacity
+          style={[styles.teamDetailAction, { backgroundColor: '#28a745', width: 200 }]}
           onPress={() => {
             navigateTo('Statistics', { 
               teamId: selectedTeam.idTeam, 
@@ -914,7 +972,7 @@ const TeamsScreen = () => {
         </View>
       );
     }
-    
+  
     if (error) {
       return (
         <View style={styles.errorContainer}>
@@ -949,18 +1007,66 @@ const TeamsScreen = () => {
         </View>
       );
     }
-    
+  
     if (selectedTeam) {
-        // Si estamos viendo las camisetas
-        if (jerseyView) {
-          return renderTeamJerseys();
-        }
-        // Si no, mostrar detalles del equipo
-        return renderTeamDetails();
+      if (jerseyView) return renderTeamJerseys();
+      return renderTeamDetails();
+    }
+  
+    // ✅ MOSTRAR PARTIDOS FUTUROS SI showUpcoming ES TRUE
+    if (showUpcoming) {
+      return (
+        <ScrollView style={{ padding: 15 }}>
+          <TouchableOpacity
+            onPress={() => {
+              setShowUpcoming(false);
+              if (previousTeam) {
+                setSelectedTeam(previousTeam); // Volver al equipo anterior
+                setPreviousTeam(null);         // Limpiar
+              }
+            }}
+          >
+            <Text style={{ color: '#0099DD', fontWeight: 'bold', marginBottom: 10 }}>
+              ← {t('backToTeamDetails')}
+            </Text>
+          </TouchableOpacity>
+    
+          {/* Mostrar el nombre del equipo si aplica */}
+          {previousTeam && (
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 5, color: isDarkMode ? '#fff' : '#000' }}>
+              {previousTeam.strTeam}
+            </Text>
+          )}
+    
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000', marginBottom: 10 }}>
+            {t('upcomingMatches')} {selectedLeague?.league}
+          </Text>
+    
+          {upcomingMatches.length === 0 ? (
+            <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>
+              {t('noUpcomingMatches')}
+            </Text>
+          ) : (
+            upcomingMatches.map((match) => (
+              <View key={match.idEvent} style={{ padding: 10, backgroundColor: isDarkMode ? '#222' : '#eee', marginBottom: 10, borderRadius: 8 }}>
+                <Text style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>{match.strEvent}</Text>
+                <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>
+                  Fecha: {match.dateEvent} - Hora: {match.strTime}
+                </Text>
+                <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>
+                  Estadio: {match.strVenue || t('unknownVenue')}
+                </Text>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      );
     }
     
+  
+    // 👇 Vista por defecto
     const isSearchMode = searchQuery.trim().length > 0;
-    
+  
     return (
       <View style={styles.mainContent}>
         {/* Search Bar */}
@@ -982,7 +1088,6 @@ const TeamsScreen = () => {
             onChangeText={(text) => {
               setSearchQuery(text);
               if (text === '') {
-                // Reset to league teams when search is cleared
                 setCurrentPage(1);
                 if (teamsCache[1]) {
                   setTeamsData(teamsCache[1]);
@@ -1000,8 +1105,20 @@ const TeamsScreen = () => {
             </Text>
           </TouchableOpacity>
         </View>
-        
-        {/* Leagues Horizontal List (only show when not in search mode) */}
+  
+        {/* Ver partidos futuros */}
+        {!isSearchMode && selectedLeague && (
+          <TouchableOpacity 
+            style={[styles.paginationButton, { marginBottom: 10 }]}
+            onPress={loadUpcomingMatches}
+          >
+            <Text style={styles.paginationButtonText}>
+              {t('viewUpcomingMatches')}
+            </Text>
+          </TouchableOpacity>
+        )}
+  
+        {/* Leagues */}
         {!isSearchMode && (
           <View style={styles.leaguesContainer}>
             <Text style={[
@@ -1010,7 +1127,6 @@ const TeamsScreen = () => {
             ]}>
               {t('leagues')}
             </Text>
-            
             <FlatList
               data={leagues}
               renderItem={renderLeagueItem}
@@ -1021,7 +1137,7 @@ const TeamsScreen = () => {
             />
           </View>
         )}
-        
+  
         {/* Teams Grid */}
         <View style={styles.gridContainer}>
           <Text style={[
@@ -1032,7 +1148,7 @@ const TeamsScreen = () => {
               t('searchResults') : 
               (selectedLeague ? selectedLeague.league : t('popularTeams'))}
           </Text>
-          
+  
           <FlatList
             data={isSearchMode ? searchResults : teamsData}
             renderItem={renderTeamItem}
@@ -1057,13 +1173,13 @@ const TeamsScreen = () => {
             }
           />
         </View>
-        
+  
         {/* Pagination */}
         {renderPaginationControls()}
       </View>
     );
   };
-
+  
   return (
     <View style={[
       styles.container, 
@@ -1079,6 +1195,11 @@ const TeamsScreen = () => {
     </View>
   );
 };
+
+export async function getUpcomingMatches(leagueId) {
+  const response = await axios.get(`https://www.thesportsdb.com/api/v1/json/1/eventsnextleague.php?id=${leagueId}`);
+  return response.data.events || [];
+}
 
 const styles = StyleSheet.create({
   container: {

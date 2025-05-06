@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 // Sports API service for communicating with TheSportsDB API
 
 const API_BASE_URL = 'https://www.thesportsdb.com/api/v1/json';
@@ -595,3 +597,9 @@ export const getTeamLastEvents = async (teamId) => {
     throw error;
   }
 };
+
+export const getUpcomingMatchesForTeam = async (teamId) => {
+  const response = await axios.get(`${API_BASE_URL}/${API_KEY}/eventsnext.php?id=${teamId}`);
+  return response.data.events || [];
+};
+
