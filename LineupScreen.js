@@ -44,15 +44,12 @@ const LineupScreen = ({ idEvent, teamName, opponentName }) => {
       <Text style={[styles.header, { color: '#000' }]}>
         Alineación del último partido – {teamName}
       </Text>
-      <Text style={[styles.subHeader, { color: '#000' }]}>
-        Rival: {opponentName}
-      </Text>
 
       {/* Lista de jugadores */}
-      {startingLineup.length === 0 ? (
-        <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>{t('noLineupAvailable')}</Text>
-      ) : (
-        startingLineup.map((player) => (
+      {/* Jugadores del equipo seleccionado */}
+      {startingLineup
+        .filter(p => p.strTeam === teamName)
+        .map((player) => (
           <View key={player.idPlayer} style={[styles.playerRow, { backgroundColor: isDarkMode ? '#222' : '#eee' }]}>
             <Image
               source={{ uri: player.strCutout || 'https://www.thesportsdb.com/images/media/player/thumb/defaultplayer.png' }}
@@ -63,8 +60,28 @@ const LineupScreen = ({ idEvent, teamName, opponentName }) => {
               <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>{player.strPosition}</Text>
             </View>
           </View>
-        ))
-      )}
+        ))}
+
+      {/* Texto del rival */}
+      <Text style={[styles.rivalHeader, { color: isDarkMode ? '#000' : '#000' }]}>
+        Rival: {opponentName}
+      </Text>
+
+      {/* Jugadores del rival */}
+      {startingLineup
+        .filter(p => p.strTeam === opponentName)
+        .map((player) => (
+          <View key={player.idPlayer} style={[styles.playerRow, { backgroundColor: isDarkMode ? '#222' : '#eee' }]}>
+            <Image
+              source={{ uri: player.strCutout || 'https://www.thesportsdb.com/images/media/player/thumb/defaultplayer.png' }}
+              style={styles.playerImage}
+            />
+            <View style={styles.playerInfo}>
+              <Text style={[styles.playerName, { color: isDarkMode ? '#fff' : '#000' }]}>{player.strPlayer}</Text>
+              <Text style={{ color: isDarkMode ? '#ccc' : '#333' }}>{player.strPosition}</Text>
+            </View>
+          </View>
+        ))}
     </ScrollView>
   );
 };
@@ -90,6 +107,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 5,
   },
+  rivalHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 25,
+    marginBottom: 10,
+  },  
   subHeader: {
     fontSize: 16,
     marginBottom: 15,
