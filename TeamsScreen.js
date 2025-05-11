@@ -649,6 +649,39 @@ const TeamsScreen = () => {
           </Text>
         </TouchableOpacity>
 
+
+        <TouchableOpacity
+          style={[styles.teamDetailAction, { backgroundColor: '#6f42c1' }]}
+          onPress={async () => {
+            try {
+              const response = await axios.get(`https://www.thesportsdb.com/api/v1/json/680723/eventslast.php?id=${selectedTeam.idTeam}`);
+              const lastEvent = response.data.results?.[0]; // el último partido
+
+              if (lastEvent) {
+                // Detectar si el equipo era local o visitante y quién era el rival
+                const isHome = lastEvent.idHomeTeam === selectedTeam.idTeam;
+                const opponentName = isHome ? lastEvent.strAwayTeam : lastEvent.strHomeTeam;
+
+                navigateTo('Lineup', {
+                  idEvent: lastEvent.idEvent,
+                  teamName: selectedTeam.strTeam,
+                  opponentName: opponentName
+                });
+              } else {
+                alert('No hay eventos recientes para este equipo.');
+              }
+            } catch (error) {
+              console.error('Error fetching last event:', error);
+              alert('No se pudo obtener el último partido.');
+            }
+          }}
+        >
+          <Text style={styles.teamDetailActionText}>
+            {t('viewLastLineup')}
+          </Text>
+        </TouchableOpacity>
+
+
       </View>
       
       <View style={styles.teamDetailInfo}>
@@ -1105,18 +1138,6 @@ const TeamsScreen = () => {
             </Text>
           </TouchableOpacity>
         </View>
-  
-        {/* Ver partidos futuros */}
-        {!isSearchMode && selectedLeague && (
-          <TouchableOpacity 
-            style={[styles.paginationButton, { marginBottom: 10 }]}
-            onPress={loadUpcomingMatches}
-          >
-            <Text style={styles.paginationButtonText}>
-              {t('viewUpcomingMatches')}
-            </Text>
-          </TouchableOpacity>
-        )}
   
         {/* Leagues */}
         {!isSearchMode && (

@@ -5,6 +5,8 @@ import UserScreen from './UserScreen';
 import PlayersScreen from './PlayersScreen';
 import TeamsScreen from './TeamsScreen';
 import StatisticsScreen from './StatisticsScreen'; 
+import LineupScreen from './LineupScreen';
+
 
 const AppContent = () => {
   const { user, loading, isDarkMode, t, activeScreen, routeParams } = useApp();
@@ -30,6 +32,14 @@ const AppContent = () => {
       return <TeamsScreen />;
     case 'Statistics':
       return <StatisticsScreen teamId={routeParams?.teamId} teamName={routeParams?.teamName} />;
+    case 'Lineup':
+      return (
+        <LineupScreen 
+          idEvent={routeParams?.idEvent} 
+          teamName={routeParams?.teamName} 
+          opponentName={routeParams?.opponentName} 
+        />
+      );
     case 'User':
     default:
       return <UserScreen />;

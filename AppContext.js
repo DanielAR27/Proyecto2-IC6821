@@ -446,6 +446,7 @@ const translations = {
     searchPlayers: "Search Players",
     searchTeams: "Search Teams",
     showFavorites: "Show Favorites",
+    viewLastLineup: "View Last Lineup",
     //Para statistics
     // En "en"
     viewStatistics: "View Statistics",
@@ -539,6 +540,7 @@ const translations = {
     searchPlayers: "Buscar Jugadores",
     searchTeams: "Buscar Equipos",
     showFavorites: "Mostrar Favoritos",
+    
     // Nuevas traducciones para TeamsScreen
     information: "Información",
     viewJerseys: "Ver Camisetas",
@@ -553,7 +555,10 @@ const translations = {
     fifthKit: "Quinta Camiseta",
     jerseys: "Camisetas",
     noJerseysAvailable: "No hay camisetas disponibles.",
-    season: "Temporada"
+    season: "Temporada",
+    viewLastLineup: "Ver última alineación"
+
+
   }
 };
 
