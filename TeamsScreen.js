@@ -21,6 +21,11 @@ import {
   getTeamBadgeUrl,
   getTeamEquipment,
   organizeEquipmentBySeason,
+  getTeamEvents,
+  isEventInPast,
+  getEventLineup,           // Actualizado para aceptar nombres de equipos
+  organizeLineupByTeam,     // Actualizado
+  getPositionInSpanish,
   TOP_LEAGUES
 } from './services/sportsApiService';
 
@@ -65,6 +70,17 @@ const TeamsScreen = () => {
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [seasonPickerVisible, setSeasonPickerVisible] = useState(false);
+
+  const [eventsView, setEventsView] = useState(false);
+  const [teamEvents, setTeamEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [selectedEventsSeason, setSelectedEventsSeason] = useState(null);
+  const [eventSeasonPickerVisible, setEventSeasonPickerVisible] = useState(false);
+
+  const [lineupView, setLineupView] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [eventLineup, setEventLineup] = useState({ homeTeam: [], awayTeam: [] });
+  const [loadingLineup, setLoadingLineup] = useState(false);
 
   // Sidebar menu items
   const sidebarItems = [
@@ -221,11 +237,19 @@ const TeamsScreen = () => {
   };
 
   const handleSelectTeam = async (team) => {
-    setSelectedTeam(team);
-    
-    // Precargar las camisetas para tenerlas listas si el usuario decide verlas
-    loadTeamEquipment(team.idTeam);
-  };
+  setSelectedTeam(team);
+  
+  // AGREGAR: Limpiar estados de eventos al cambiar de equipo
+  setTeamEvents([]);
+  setEventsView(false);
+  setLineupView(false);
+  setSelectedEvent(null);
+  setEventLineup({ homeTeam: [], awayTeam: [] });
+  
+  // Precargar las camisetas y eventos para tenerlas listas
+  loadTeamEquipment(team.idTeam);
+  loadTeamEvents(team.idTeam);
+};
 
   // Handle refresh
   const onRefresh = async () => {
@@ -412,6 +436,67 @@ const TeamsScreen = () => {
         return type;
     }
   };
+
+  // Función para cargar eventos del equipo
+  const loadTeamEvents = async (teamId) => {
+    try {
+      setLoadingEvents(true);
+      setError(null);
+      
+      const events = await getTeamEvents(teamId);
+      setTeamEvents(events);
+      
+      setLoadingEvents(false);
+    } catch (error) {
+      console.error('Error loading team events:', error);
+      setError(error.message || t('errorMessage'));
+      setLoadingEvents(false);
+    }
+  };
+
+  // Función para formatear la fecha
+  const formatEventDate = (dateString) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short', 
+      day: 'numeric'
+    });
+  };
+
+  // Función para obtener el nombre del tipo de evento
+  const getEventTypeName = (type) => {
+    // Mapear tipos de eventos si es necesario
+    return type || '';
+  };
+
+  const loadEventLineup = async (eventId, homeTeamName, awayTeamName) => {
+    try {
+      setLoadingLineup(true);
+      setError(null);
+      
+      // Pasar los nombres de los equipos para mejorar la clasificación
+      const lineup = await getEventLineup(eventId, homeTeamName, awayTeamName);
+      setEventLineup(lineup);
+      
+      setLoadingLineup(false);
+    } catch (error) {
+      console.error('Error loading event lineup:', error);
+      setError(error.message || t('errorMessage'));
+      setLoadingLineup(false);
+    }
+  };
+
+  // Función para manejar la selección de un evento
+  const handleSelectEvent = async (event) => {
+    setSelectedEvent(event);
+    // Pasar los nombres de los equipos desde el evento
+    await loadEventLineup(event.idEvent, event.strHomeTeam, event.strAwayTeam);
+    setLineupView(true);
+  };
   
   // Render a league item
   const renderLeagueItem = ({ item }) => (
@@ -555,6 +640,24 @@ const TeamsScreen = () => {
         >
           <Text style={styles.teamDetailActionText}>
             {t('information')}
+          </Text>
+        </TouchableOpacity>
+        
+        {/* BOTÓN Ver eventos */}
+        <TouchableOpacity
+          style={[
+            styles.teamDetailAction,
+            { backgroundColor: '#e67e22' }
+          ]}
+          onPress={() => {
+            // CAMBIO: Siempre recargar eventos para el equipo actual
+            // Esto asegura que se obtengan los eventos correctos para este equipo
+            loadTeamEvents(selectedTeam.idTeam);
+            setEventsView(true);
+          }}
+        >
+          <Text style={styles.teamDetailActionText}>
+            {t('viewEvents')}
           </Text>
         </TouchableOpacity>
         
@@ -713,6 +816,238 @@ const TeamsScreen = () => {
       </TouchableOpacity>
     </ScrollView>
   );
+
+  const renderTeamEvents = () => {
+    const textColor = isDarkMode ? 'white' : 'black';
+    const borderColor = isDarkMode ? 'white' : 'black';
+    const backgroundColor = isDarkMode ? '#333' : '#f5f5f5';
+    const headerBackgroundColor = isDarkMode ? '#222' : '#e0e0e0';
+    const eventItemBackgroundColor = isDarkMode ? 'rgba(50,50,50,0.6)' : 'rgba(220,220,220,0.6)';
+    
+    return (
+      <View style={[
+        styles.container,
+        { backgroundColor: backgroundColor}
+      ]}>
+        {/* Header simplificado - SOLO botón back */}
+        <View style={[styles.eventsHeader, { backgroundColor: headerBackgroundColor }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setEventsView(false)}
+          >
+            <Text style={[styles.backButtonText, { color: textColor }]}>
+              ← {t('back')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Título simplificado */}
+        <Text style={[styles.eventsTitle, { color: textColor }]}>
+          {t('recentEvents')}
+        </Text>
+        
+        {/* ELIMINAR: seasonSubtitle y todo el modal de selección de temporada */}
+        
+        {/* Lista de eventos */}
+        <ScrollView
+          style={styles.eventsScrollView}
+          contentContainerStyle={styles.eventsScrollContent}
+        >
+          {loadingEvents ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#e67e22" />
+              <Text style={[styles.loadingText, { color: textColor }]}>
+                {t('loading')}
+              </Text>
+            </View>
+          ) : teamEvents.length > 0 ? (
+            <View style={styles.eventsList}>
+              {teamEvents.map((event, index) => {
+                const isPastEvent = isEventInPast(event.dateEvent, event.strTime);
+                
+                return (
+                  <TouchableOpacity
+                    key={event.idEvent || index} 
+                    style={[
+                      styles.eventItem, 
+                      { backgroundColor: eventItemBackgroundColor, borderColor:borderColor, borderWidth: 1, borderRadius: 10, padding: 10, flex: 1 }
+                    ]}
+                    onPress={() => handleSelectEvent(event)}
+                  >
+                    <Text style={[styles.eventName, { color: textColor }]}>
+                      {event.strEvent}
+                    </Text>
+                    
+                    <Text style={[styles.eventLeague, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                      {event.strLeague}
+                    </Text>
+                    
+                    {/* <View style={styles.eventTeams}>
+                      <Text style={[styles.teamName, { color: textColor }]}>
+                        {event.strHomeTeam}
+                      </Text>
+                      <Text style={[styles.vsText, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                        {t('vs')}
+                      </Text>
+                      <Text style={[styles.teamName, { color: textColor }]}>
+                        {event.strAwayTeam}
+                      </Text>
+                    </View> */}
+                    
+                    <Text style={[styles.eventDate, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                      {formatEventDate(event.dateEvent)}
+                      {event.strTime && ` - ${event.strTime}`}
+                    </Text>
+                    
+                    {isPastEvent && event.intHomeScore !== null && event.intAwayScore !== null && (
+                      <Text style={[styles.eventResult, { color: '#e67e22' }]}>
+                        {t('result')}: {event.intHomeScore} - {event.intAwayScore}
+                      </Text>
+                    )}
+                    
+                    <Text style={[styles.clickHint, { color: isDarkMode ? '#888' : '#999' }]}>
+                      {t('viewLineup')} →
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.noEventsContainer}>
+              <Text style={[styles.noEventsText, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                {t('noEventsAvailable')}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderEventLineup = () => {
+    const textColor = isDarkMode ? 'white' : 'black';
+    const backgroundColor = isDarkMode ? '#333' : '#f5f5f5';
+    const headerBackgroundColor = isDarkMode ? '#222' : '#e0e0e0';
+    const lineupCardBackgroundColor = isDarkMode ? 'rgba(50,50,50,0.6)' : 'rgba(220,220,220,0.6)';
+    
+    // Función para renderizar una lista de jugadores
+    const renderPlayersList = (players, title) => (
+      <View style={styles.teamLineupSection}>
+        <Text style={[styles.lineupSectionTitle, { color: textColor }]}>
+          {title}
+        </Text>
+        {players.length > 0 ? (
+          players.map((player, index) => (
+            <View key={player.id || index} style={[
+              styles.playerLineupItem,
+              { backgroundColor: lineupCardBackgroundColor }
+            ]}>
+              <Text style={[styles.playerNumber, { color: '#e67e22' }]}>
+                {player.number || '--'}
+              </Text>
+              <Text style={[styles.playerName, { color: textColor }]}>
+                {player.name}
+              </Text>
+              <Text style={[styles.playerPosition, { color: isDarkMode ? '#ccc' : '#666' }]}>
+                {language === 'es' ? getPositionInSpanish(player.position) : player.position}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={[styles.noPlayersText, { color: isDarkMode ? '#ccc' : '#666' }]}>
+            {t('noLineupAvailable')}
+          </Text>
+        )}
+      </View>
+    );
+    
+    return (
+      <View style={[
+        styles.container,
+        { backgroundColor: backgroundColor }
+      ]}>
+        {/* Header */}
+        <View style={[styles.lineupHeader, { backgroundColor: headerBackgroundColor }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setLineupView(false)}
+          >
+            <Text style={[styles.backButtonText, { color: textColor }]}>
+              ← {t('back')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Título del evento */}
+        <Text style={[styles.lineupTitle, { color: textColor }]}>
+          {selectedEvent?.strEvent}
+        </Text>
+        
+        <Text style={[styles.lineupSubtitle, { color: isDarkMode ? '#ccc' : '#666' }]}>
+          {formatEventDate(selectedEvent?.dateEvent)}
+          {selectedEvent?.strTime && ` - ${selectedEvent.strTime}`}
+        </Text>
+        
+        {/* Resultado si está disponible */}
+        {selectedEvent && isEventInPast(selectedEvent.dateEvent, selectedEvent.strTime) && 
+        selectedEvent.intHomeScore !== null && selectedEvent.intAwayScore !== null && (
+          <Text style={[styles.lineupResult, { color: '#e67e22' }]}>
+            {selectedEvent.strHomeTeam} {selectedEvent.intHomeScore} - {selectedEvent.intAwayScore} {selectedEvent.strAwayTeam}
+          </Text>
+        )}
+        
+        {/* Contenido de las alineaciones */}
+        <ScrollView
+          style={styles.lineupScrollView}
+          contentContainerStyle={styles.lineupScrollContent}
+        >
+          {loadingLineup ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#e67e22" />
+              <Text style={[styles.loadingText, { color: textColor }]}>
+                {t('loading')}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.lineupContainer}>
+              {/* Alineación equipo local */}
+              <View style={styles.teamLineupContainer}>
+                <Text style={[styles.teamLineupTitle, { color: textColor }]}>
+                  {selectedEvent?.strHomeTeam}
+                </Text>
+                
+                {eventLineup.homeTeam.starters && (
+                  <>
+                    {renderPlayersList(eventLineup.homeTeam.starters, t('starters'))}
+                    {eventLineup.homeTeam.substitutes.length > 0 && 
+                      renderPlayersList(eventLineup.homeTeam.substitutes, t('substitutes'))}
+                  </>
+                )}
+              </View>
+              
+              {/* Separador */}
+              <View style={[styles.lineupSeparator, { backgroundColor: isDarkMode ? '#555' : '#ddd' }]} />
+              
+              {/* Alineación equipo visitante */}
+              <View style={styles.teamLineupContainer}>
+                <Text style={[styles.teamLineupTitle, { color: textColor }]}>
+                  {selectedEvent?.strAwayTeam}
+                </Text>
+                
+                {eventLineup.awayTeam.starters && (
+                  <>
+                    {renderPlayersList(eventLineup.awayTeam.starters, t('starters'))}
+                    {eventLineup.awayTeam.substitutes.length > 0 && 
+                      renderPlayersList(eventLineup.awayTeam.substitutes, t('substitutes'))}
+                  </>
+                )}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const renderTeamJerseys = () => {
     // Determine colors based on theme mode
@@ -936,12 +1271,20 @@ const TeamsScreen = () => {
     }
     
     if (selectedTeam) {
-        // Si estamos viendo las camisetas
-        if (jerseyView) {
-          return renderTeamJerseys();
-        }
-        // Si no, mostrar detalles del equipo
-        return renderTeamDetails();
+      // Si estamos viendo alineaciones de un evento
+      if (lineupView) {
+        return renderEventLineup();
+      }
+      // Si estamos viendo eventos
+      if (eventsView) {
+        return renderTeamEvents();
+      }
+      // Si estamos viendo las camisetas  
+      if (jerseyView) {
+        return renderTeamJerseys();
+      }
+      // Si no, mostrar detalles del equipo
+      return renderTeamDetails();
     }
     
     const isSearchMode = searchQuery.trim().length > 0;
@@ -1250,8 +1593,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 5,
-    minWidth: 120,
+    minWidth: 108,
     alignItems: 'center',
+    marginRight: 3
   },
   teamDetailActionText: {
     color: 'white',
@@ -1464,6 +1808,180 @@ const styles = StyleSheet.create({
   seasonPickerItemText: {
     fontSize: 16,
     color: 'white', // Siempre blanco para la vista de camisetas
+  },
+  eventsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10
+  },
+  eventsTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  eventsScrollView: {
+    flex: 1,
+    padding: 10,
+  },
+  eventsScrollContent: {
+    paddingBottom: 20,
+  },
+  eventsList: {
+    flex: 1,
+  },
+  eventItem: {
+    marginBottom: 15,
+    borderRadius: 10,
+    padding: 15,
+  },
+  eventName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  eventLeague: {
+    fontSize: 14,
+    marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontStyle: 'italic',
+  },
+  eventTeams: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  
+  vsText: {
+    fontSize: 14,
+    marginHorizontal: 10,
+    fontWeight: 'bold',
+  },
+  eventDate: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  eventResult: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  noEventsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  noEventsText: {
+    fontSize: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  clickHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  lineupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10
+  },
+  lineupTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 15,
+  },
+  lineupSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginVertical: 5,
+    paddingHorizontal: 15,
+  },
+  lineupResult: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  lineupScrollView: {
+    flex: 1,
+    padding: 10,
+  },
+  lineupScrollContent: {
+    paddingBottom: 20,
+  },
+  lineupContainer: {
+    flex: 1,
+  },
+  teamLineupContainer: {
+    marginBottom: 20,
+  },
+  teamLineupTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+    paddingVertical: 10,
+  },
+  teamLineupSection: {
+    marginBottom: 20,
+  },
+  lineupSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    paddingHorizontal: 10,
+  },
+  playerLineupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+    marginHorizontal: 10,
+    borderRadius: 8,
+  },
+  playerNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    width: 40,
+    textAlign: 'center',
+  },
+  playerName: {
+    fontSize: 15,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 15,
+  },
+  playerPosition: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    width: 100,
+    textAlign: 'right',
+  },
+  noPlayersText: {
+    fontSize: 14,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    padding: 20,
+  },
+  lineupSeparator: {
+    height: 2,
+    marginVertical: 15,
+    marginHorizontal: 20,
   },
 });
 

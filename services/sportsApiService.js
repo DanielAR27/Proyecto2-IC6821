@@ -583,3 +583,196 @@ export const organizeEquipmentBySeason = (equipment) => {
     };
   });
 };
+
+// Función para obtener eventos de un equipo por temporada
+export const getTeamEvents = async (teamId) => {
+  try {
+    // Verificar la caché primero
+    const cacheKey = `events_${teamId}`;
+    if (teamsCache[cacheKey] && isCacheValid()) {
+      return teamsCache[cacheKey];
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/eventslast.php?id=${teamId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const events = data.results || [];
+    
+    // Ordenar eventos por fecha (más recientes primero)
+    const sortedEvents = events.sort((a, b) => {
+      const dateA = new Date(a.dateEvent);
+      const dateB = new Date(b.dateEvent);
+      return dateB - dateA;
+    });
+    
+    // Guardar en caché
+    teamsCache[cacheKey] = sortedEvents;
+    lastFetchTime = Date.now();
+    
+    return sortedEvents;
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Función para obtener las temporadas disponibles para un equipo
+export const getAvailableSeasons = (currentYear = new Date().getFullYear()) => {
+  const seasons = [];
+  const startYear = 2020; // Comenzar desde 2020
+  
+  for (let year = currentYear; year >= startYear; year--) {
+    seasons.push(`${year}-${year + 1}`);
+    seasons.push(year.toString());
+  }
+  
+  return seasons;
+};
+
+// Función para verificar si un evento ya pasó
+export const isEventInPast = (dateEvent, timeEvent = null) => {
+  if (!dateEvent) return false;
+  
+  const eventDate = new Date(dateEvent);
+  
+  // Si tenemos la hora del evento, incluirla
+  if (timeEvent) {
+    const [hours, minutes] = timeEvent.split(':');
+    eventDate.setHours(parseInt(hours), parseInt(minutes));
+  }
+  
+  return eventDate < new Date();
+};
+
+// Función para obtener las alineaciones de un evento
+export const getEventLineup = async (eventId, homeTeamName = null, awayTeamName = null) => {
+  try {
+    // Verificar la caché primero
+    const cacheKey = `lineup_${eventId}`;
+    if (teamsCache[cacheKey] && isCacheValid()) {
+      return teamsCache[cacheKey];
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/lookuplineup.php?id=${eventId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const lineup = data.lineup || [];
+    
+    // Organizar las alineaciones por equipo, pasando los nombres de los equipos
+    const organizedLineup = organizeLineupByTeam(lineup, homeTeamName, awayTeamName);
+    
+    // Guardar en caché
+    teamsCache[cacheKey] = organizedLineup;
+    lastFetchTime = Date.now();
+    
+    return organizedLineup;
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Función para organizar las alineaciones por equipo
+export const organizeLineupByTeam = (lineup, homeTeamName, awayTeamName) => {
+  if (!lineup || !Array.isArray(lineup) || lineup.length === 0) {
+    return { homeTeam: { starters: [], substitutes: [] }, awayTeam: { starters: [], substitutes: [] } };
+  }
+  
+  const homeTeamLineup = [];
+  const awayTeamLineup = [];
+  
+  lineup.forEach(player => {
+    if (!player || !player.strPlayer) return;
+    
+    const playerData = {
+      id: player.idPlayer,
+      name: player.strPlayer,
+      position: player.strPosition || '',
+      number: player.intSquadNumber || '',
+      team: player.strTeam || '',
+      formation: player.strFormation || '',
+      substitute: player.strSubstitute === 'Yes'
+    };
+    
+    // Mejorar la lógica de clasificación por equipo
+    let isHomeTeam = false;
+    
+    // Método 1: Verificar por campos específicos de la API
+    if (player.strTeamSide === 'Home' || player.strSide === 'Home') {
+      isHomeTeam = true;
+    } else if (player.strTeamSide === 'Away' || player.strSide === 'Away') {
+      isHomeTeam = false;
+    } 
+    // Método 2: Comparar nombres de equipos (normalizado)
+    else if (homeTeamName && awayTeamName && player.strTeam) {
+      const normalizeTeamName = (name) => name.toLowerCase().trim();
+      const playerTeamNormalized = normalizeTeamName(player.strTeam);
+      const homeTeamNormalized = normalizeTeamName(homeTeamName);
+      const awayTeamNormalized = normalizeTeamName(awayTeamName);
+      
+      if (playerTeamNormalized === homeTeamNormalized) {
+        isHomeTeam = true;
+      } else if (playerTeamNormalized === awayTeamNormalized) {
+        isHomeTeam = false;
+      } else {
+        // Método 3: Verificar si el nombre del equipo está contenido en el nombre del jugador del equipo
+        if (homeTeamName.toLowerCase().includes(playerTeamNormalized) || 
+            playerTeamNormalized.includes(homeTeamName.toLowerCase())) {
+          isHomeTeam = true;
+        } else {
+          isHomeTeam = false;
+        }
+      }
+    }
+    // Método 4: Si no hay información de equipo, dividir por la mitad (fallback)
+    else {
+      // Usar el índice para dividir aproximadamente por la mitad
+      const playerIndex = lineup.indexOf(player);
+      isHomeTeam = playerIndex < Math.floor(lineup.length / 2);
+    }
+    
+    if (isHomeTeam) {
+      homeTeamLineup.push(playerData);
+    } else {
+      awayTeamLineup.push(playerData);
+    }
+  });
+  
+  // Ordenar por número de camiseta
+  const sortByNumber = (a, b) => {
+    const numA = parseInt(a.number) || 999;
+    const numB = parseInt(b.number) || 999;
+    return numA - numB;
+  };
+  
+  // Separar titulares y suplentes, luego ordenar
+  const separateAndSort = (teamLineup) => {
+    const starters = teamLineup.filter(p => !p.substitute).sort(sortByNumber);
+    const substitutes = teamLineup.filter(p => p.substitute).sort(sortByNumber);
+    return { starters, substitutes };
+  };
+  
+  return {
+    homeTeam: separateAndSort(homeTeamLineup),
+    awayTeam: separateAndSort(awayTeamLineup)
+  };
+};
+
+// Función para obtener la posición en español
+export const getPositionInSpanish = (position) => {
+  const positionMap = {
+    'Goalkeeper': 'Portero',
+    'Defender': 'Defensor',
+    'Midfielder': 'Centrocampista',
+    'Forward': 'Delantero',
+    'Substitute': 'Suplente'
+  };
+  
+  return positionMap[position] || position;
+};
