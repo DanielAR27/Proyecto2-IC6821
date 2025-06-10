@@ -91,6 +91,14 @@ const TeamsScreen = () => {
     {
       label: t('watchPlayers'),
       onPress: () => navigateTo('Players')
+    },
+    {
+      label: t('upcomingMatches'),
+      onPress: () => navigateTo('UpcomingMatches')
+    },
+    {
+      label: t('watchTeams'),
+      onPress: () => navigateTo('Teams')
     }
   ];
 

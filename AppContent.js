@@ -4,6 +4,7 @@ import { useApp } from './AppContext';
 import UserScreen from './UserScreen';
 import PlayersScreen from './PlayersScreen';
 import TeamsScreen from './TeamsScreen';
+import UpcomingMatchesScreen from './UpcomingMatchesScreen';
 
 const AppContent = () => {
   const { user, loading, isDarkMode, t, activeScreen } = useApp();
@@ -36,6 +37,8 @@ const AppContent = () => {
       return <PlayersScreen />;
     case 'Teams':
       return <TeamsScreen />;
+    case 'UpcomingMatches': // Nuevo caso para la pantalla de próximos partidos
+      return <UpcomingMatchesScreen />;
     case 'User':
     default:
       return <UserScreen />;
