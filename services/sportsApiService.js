@@ -66,6 +66,46 @@ const isCacheValid = () => {
   return (Date.now() - lastFetchTime) < CACHE_EXPIRY;
 };
 
+// Obtener los próximos partidos de una liga específica
+export const getUpcomingMatchesByLeague = async (leagueId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/eventsnextleague.php?id=${leagueId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    const data = await response.json();
+
+    // Devuelve los eventos con los datos necesarios
+    return data.events.map(event => ({
+      idEvent: event.idEvent,
+      strHomeTeam: event.strHomeTeam,
+      strAwayTeam: event.strAwayTeam,
+      dateEvent: event.dateEvent,
+      strTime: event.strTime,
+      strHomeTeamBadge: event.strHomeTeamBadge || '', // Badge del equipo local
+      strAwayTeamBadge: event.strAwayTeamBadge || '', // Badge del equipo visitante
+    }));
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Obtener los próximos partidos de un equipo específico
+export const getUpcomingMatchesByTeam = async (teamId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${API_KEY}/eventsnext.php?id=${teamId}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.events || [];
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
 // Función de filtrado - también va en sportsApiService.js:
 const isSoccerPlayer = (player) => {
     if (!player || !player.strPosition) {

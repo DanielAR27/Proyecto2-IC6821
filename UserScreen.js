@@ -27,7 +27,12 @@ const UserScreen = () => {
     {
       label: t('watchTeams'),
       onPress: () => navigateTo('Teams')
+    },
+    {
+      label: t('upcomingMatches'), // Nueva opción para "Próximos Partidos"
+      onPress: () => navigateTo('UpcomingMatches')
     }
+    
   ];
 
   // Header menu items
